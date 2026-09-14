@@ -1,0 +1,26 @@
+{
+  "name": "ia-package",
+  "version": "0.1.0",
+  "description": "Pipeline de documentação técnica assistida por IA: entrevistas guiadas que geram PRD, HLD, FDD, specs, ADRs e diagramas C4/Mermaid, até a implementação da feature.",
+  "author": {
+    "name": "Javiel Rezende",
+    "email": "javielrezende@gmail.com"
+  },
+  "homepage": "https://github.com/javielrezende/ia-package",
+  "repository": "https://github.com/javielrezende/ia-package",
+  "license": "MIT",
+  "keywords": [
+    "prd",
+    "hld",
+    "fdd",
+    "adr",
+    "c4",
+    "mermaid",
+    "documentacao",
+    "arquitetura",
+    "spec-driven-development"
+  ],
+  "skills": [
+    "./skills/for-interviews/"
+  ]
+}

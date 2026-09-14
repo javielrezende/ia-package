@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# SessionStart — injeta no contexto onde o projeto está no pipeline de documentação.
+#
+# Sem isso, o Claude só descobre que já existe um docs/PRD.md depois de procurar.
+# Com isso, ele já começa a sessão sabendo qual é o próximo passo do pipeline.
+set -uo pipefail
+
+ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
+cd "$ROOT" 2>/dev/null || exit 0
+
+# Um plugin não deve inventar convenções: só reporta o que encontra.
+found=""
+add() { found="${found}\n- $1"; }
+
+[ -f "docs/PRD.md" ]  && add "PRD:   docs/PRD.md"
+[ -f "docs/HLD.md" ]  && add "HLD:   docs/HLD.md"
+[ -f "docs/FDD.md" ]  && add "FDD:   docs/FDD.md"
+
+feature_dirs=$(find docs -maxdepth 1 -type d -name 'F[0-9][0-9]*' 2>/dev/null | sort | head -20)
+if [ -n "$feature_dirs" ]; then
+  while IFS= read -r d; do
+    [ -z "$d" ] && continue
+    marks=""
+    [ -f "$d/spec.md" ] && marks="${marks}spec "
+    [ -f "$d/plan.md" ] && marks="${marks}plan "
+    [ -z "$marks" ] && marks="(vazia) "
+    add "Feature: $d — ${marks% }"
+  done <<< "$feature_dirs"
+fi
+
+adr_count=$(find docs/adrs -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
+[ "${adr_count:-0}" -gt 0 ] && add "ADRs:  $adr_count em docs/adrs/"
+
+c4_count=$(find docs/c4 -name '*.puml' 2>/dev/null | wc -l | tr -d ' ')
+[ "${c4_count:-0}" -gt 0 ] && add "C4:    $c4_count diagramas em docs/c4/"
+
+mmd_count=$(find docs/mermaid -name '*.mmd' -o -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
+[ "${mmd_count:-0}" -gt 0 ] && add "Mermaid: $mmd_count arquivos em docs/mermaid/"
+
+# Nada do pipeline existe ainda: fica quieto em vez de poluir toda sessão.
+[ -z "$found" ] && exit 0
+
+printf 'Artefatos do pipeline ia-package já presentes neste projeto:%b\n\nOrdem do pipeline: PRD -> HLD -> FDD -> spec/plan -> implementação -> ADRs -> diagramas. Leia o artefato anterior antes de gerar o próximo, em vez de reperguntar ao usuário o que já está documentado.\n' "$found"
+exit 0

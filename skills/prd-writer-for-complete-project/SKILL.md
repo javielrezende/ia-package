@@ -18,6 +18,7 @@ A partir do comando de invocação, você recebe:
 - `PROJECT_NAME`: Nome do projeto
 - `OUTPUT_FOLDER`: Pasta onde salvar o PRD
 - `PRD_PATH`: Caminho completo (full path) para o arquivo do PRD
+- `PROGRESS_PATH`: Caminho completo para o arquivo de progresso. Quando não informado, o padrão é `{OUTPUT_FOLDER}/prd_progress.json`.
 - `PRODUCT_DESCRIPTION`: Conteúdo combinado do contexto (arquivo ou pasta) e/ou descrição
 
 ---
@@ -144,6 +145,7 @@ Gere o PRD com base nas respostas da FASE 2 + contexto do projeto. Não peça ap
   - Subtítulos e labels: `Glossary`, `Assumptions`, `Primary Users`, `Behavioral Profile`, `Use Scenarios`, `In Scope`, `Out of Scope`, `Non-Goals`, `Core Scope`, `Full Scope additions`, `Capabilities`, `Experience`, `Error Handling`, `Open Questions`, `Cross-Feature Integration`
   - Cabeçalhos de tabela e labels do Anexo A: `# | Feature | Priority | Dependencies`, o valor `None`, `Consumes`, `Provides`, `Feature Data Contracts`, `Dependency Graph`, `Foundation Features`, `Execution Waves`, `Priority levels`
 - Termos consagrados do domínio (upload, e-mail, dashboard, nomes de formatos) permanecem como são, dentro do texto em português.
+- O arquivo de progresso (`prd_progress.json`) não é texto redigido: chaves e valores de `status` seguem exatamente o schema da seção "SCHEMA DO ARQUIVO DE PROGRESSO", em inglês. Apenas o `name` de cada feature é copiado do PRD como está.
 
 **Regra de Ouro (Golden Rule) — três casos, não dois:**
 
@@ -508,7 +510,7 @@ Após a Seção 12, emita o Anexo A, precedido de um separador `---` e do aviso 
 ```markdown
 # Appendix A: Implementation Planning
 
-> Este anexo **não faz parte do PRD**. Ele não contém requisitos de produto e não deve ser usado como fonte de escopo de negócio. Existe para alimentar as skills `spec-writer` e `implement-feature` com o grafo de dependências entre features e o sequenciamento de construção. Decisões de arquitetura e tecnologia permanecem fora daqui — elas pertencem ao HLD e ao FDD.
+> Este anexo **não faz parte do PRD**. Ele não contém requisitos de produto e não deve ser usado como fonte de escopo de negócio. Existe para registrar o grafo de dependências entre features e o sequenciamento de construção. Decisões de arquitetura e tecnologia permanecem fora daqui — elas pertencem ao HLD e ao FDD.
 ```
 
 O anexo tem cinco partes. A numeração `A.1` a `A.5` é fixa: quando `A.3 Foundation Features` não se aplica e é omitida, as demais mantêm seus números — não renumere.
@@ -664,11 +666,19 @@ ANTES de salvar, valide internamente.
 - [ ] Consistência de campos — todo dado nomeado em `Consumes` é coberto pela entrada `Provides` correspondente (mesmo nome, ou termo claramente mais amplo que o contém). Se não houver correspondência explícita, expanda o `Provides` para nomeá-lo em vez de depender de cobertura implícita
 - [ ] `Foundation Features` (quando presente): toda feature listada existe na tabela, em ordem topológica, com descrição da contribuição; a nota de serialização está em `Execution Waves`
 
+**Consistência do arquivo de progresso** (valida os dados que a FASE 5 vai gravar):
+- [ ] Todo feature ID da Seção 6 vai aparecer como chave em `features` do arquivo de progresso
+- [ ] `dependencies` de cada feature é igual à coluna `Dependencies` da tabela A.2
+- [ ] `priority` de cada feature é igual à coluna `Priority` da tabela A.2
+- [ ] `wave` de cada feature é igual à wave calculada em A.4 `Execution Waves`
+
 **Loop de validação:** execute o checklist uma vez. Se algum item falhar, corrija e execute novamente. Repita por até 3 iterações. Se os problemas persistirem, pare, reporte o que restou e peça orientação antes de salvar.
 
 ---
 
-### FASE 5: Salvar PRD
+### FASE 5: Salvar PRD e Arquivo de Progresso
+
+**Passo 1 — Salvar o PRD**
 
 1. Salve o PRD em `{PRD_PATH}`
 
@@ -680,14 +690,46 @@ ANTES de salvar, valide internamente.
 
 5. O documento começa com o nome do produto como H1, seguido da Section 1
 
-6. **Reporte ao usuário, no chat:**
-   - O caminho exato do arquivo
+**Passo 2 — Montar o conteúdo do arquivo de progresso**
+
+Monte o JSON de `{PROGRESS_PATH}` seguindo a seção "SCHEMA DO ARQUIVO DE PROGRESSO" abaixo. Use o timestamp atual em RFC 3339 UTC (ex.: `2026-05-02T14:30:00Z`); chame-o de `now`.
+
+Decida conforme o arquivo já exista ou não:
+
+**Caso A — `{PROGRESS_PATH}` NÃO existe (primeira geração):**
+- Defina `schema_version: 1`, `prd_path: {PRD_PATH}`, `generated_at: now`.
+- Para cada feature ID da tabela A.2 do Anexo A, crie uma entrada com:
+  - `name`, `priority`, `dependencies` copiados da tabela A.2 e `wave` copiado de A.4
+  - `status: "pending"`, `cycles: 0`
+  - `failure_reason: null`, `report_path: null`, `started_at: null`, `completed_at: null`
+  - `updated_at: now`
+
+**Caso B — `{PROGRESS_PATH}` existe (regeneração do PRD / merge):**
+- Leia e faça o parse do JSON existente. Se o parse falhar, veja os CASOS DE BORDA ("Arquivo de progresso existente corrompido").
+- Se o `schema_version` do arquivo existente for maior que `1`, pare e reporte — não faça downgrade.
+- Preserve `generated_at` do arquivo existente. Atualize `prd_path` para `{PRD_PATH}`.
+- Aplique o contrato de merge por feature ID (IDs são imutáveis):
+  - **ID existe no arquivo antigo E no novo PRD, e o `status` antigo NÃO é `removed`:** preserve `status`, `cycles`, `failure_reason`, `report_path`, `started_at`, `completed_at` da entrada existente. Atualize `name`, `priority`, `wave`, `dependencies` a partir do PRD. Atualize `updated_at` para `now` SOMENTE se algum campo atualizado de fato mudou; caso contrário, mantenha o `updated_at` anterior.
+  - **ID existe no arquivo antigo E no novo PRD, e o `status` antigo É `removed` (feature ressuscitada):** o ciclo de vida recomeça. Redefina `status: "pending"`, `cycles: 0` e limpe todos os campos opcionais (`failure_reason`, `report_path`, `started_at`, `completed_at`) para `null`. Atualize `name`, `priority`, `wave`, `dependencies` a partir do PRD. Defina `updated_at: now`.
+  - **ID só no novo PRD (nunca visto antes):** adicione a entrada exatamente como no Caso A (`pending`, `cycles: 0`, campos opcionais `null`, `updated_at: now`).
+  - **ID só no arquivo antigo (feature removida do PRD):** mantenha a entrada; se o `status` ainda não for `removed`, defina `status: "removed"` e atualize `updated_at: now`. Preserve `failure_reason`, `report_path`, `started_at`, `completed_at` e `cycles` como registro forense do estado anterior. Nunca apague entradas.
+
+**Passo 3 — Escrita atômica**
+
+Escreva o JSON em `{PROGRESS_PATH}.tmp` e depois renomeie para `{PROGRESS_PATH}`. Isso garante que outras skills nunca leiam um arquivo escrito pela metade.
+
+**Passo 4 — Verificar e reportar**
+
+1. Leia `{PROGRESS_PATH}` e confirme que é um JSON válido e que contém como chave em `features` todo feature ID da Seção 6 do PRD.
+
+2. **Reporte ao usuário, no chat:**
+   - O caminho exato do PRD e do arquivo de progresso
    - Quantas features, RFs, RNFs, decisões, dependências e riscos foram gerados
    - A lista de `Open Questions` que ficaram como `[A DEFINIR]`
    - A lista de `Assumptions` inferidas, para revisão
    - As **Notas técnicas para o HLD** coletadas durante a entrevista, com a oferta de salvá-las em `{OUTPUT_FOLDER}/PRD-technical-notes.md`
 
-7. Sugira o próximo passo: `generate-high-level-design` para a arquitetura, depois `spec-writer` por feature.
+3. Sugira o próximo passo: `generate-high-level-design` para a arquitetura, depois `spec-writer` por feature.
 
 ---
 
@@ -706,6 +748,9 @@ ANTES de salvar, valide internamente.
 - Calcule as Execution Waves mecanicamente a partir da tabela A.2
 - Valide internamente ANTES de salvar
 - Comece o documento com o nome do produto (H1), sem cabeçalho de ID/data/versão
+- Salve o arquivo de progresso junto com o PRD na FASE 5
+- Use escrita atômica (`.tmp` + rename) para o arquivo de progresso
+- Aplique o contrato de merge da FASE 5 ao regenerar: preserve o estado de execução (`status`, `cycles`, `failure_reason`, `report_path`, `started_at`, `completed_at`) das features que continuam no novo PRD; volte para `pending` quando uma feature `removed` for ressuscitada; marque como `removed` as features que sumiram
 
 **NUNCA:**
 - Coloque tecnologia, arquitetura, stack ou estrutura de código nas Seções 1-12
@@ -717,6 +762,8 @@ ANTES de salvar, valide internamente.
 - Escreva um trade-off sem dizer o que se perde
 - Escreva um RNF sem alvo mensurável
 - Inclua forward references na tabela de dependências
+- Sobrescreva o arquivo de progresso sem aplicar o contrato de merge
+- Apague entradas do arquivo de progresso (use `status: "removed"`)
 
 ---
 
@@ -750,6 +797,75 @@ ANTES de salvar, valide internamente.
 
 **Feature com 4+ dependências:**
 - Verifique se cada uma é requisito genuíno de dado funcional, não apenas "seria bom ter antes". Mantenha só aquelas sem as quais a feature não funciona.
+
+**Arquivo de progresso existente corrompido:**
+- Se `{PROGRESS_PATH}` existe mas não é um JSON válido: NÃO sobrescreva em silêncio. Renomeie para `{PROGRESS_PATH}.broken-<unix-timestamp>` e crie um arquivo novo a partir do PRD, como no Caso A. Informe ao usuário que o arquivo anterior foi preservado com o novo nome.
+
+**`schema_version` do arquivo de progresso mais novo do que esta skill conhece:**
+- Se o arquivo existente tiver `schema_version` maior que `1`: pare e reporte ao usuário. Estado gravado por uma versão futura da skill não pode sofrer downgrade. Não grave nada.
+
+---
+
+## SCHEMA DO ARQUIVO DE PROGRESSO (PROGRESS FILE SCHEMA)
+
+O arquivo de progresso (`prd_progress.json`) é um registro determinístico, legível por máquina, da situação de implementação de cada feature. Esta skill cria o arquivo e faz o merge; as skills seguintes do pipeline (`implement-feature`, `evaluator`, `fix-runner`, `implement-and-evaluate`, `implement-and-evaluate-tmux`) leem e gravam nele durante suas próprias execuções.
+
+**Estrutura de primeiro nível:**
+
+```json
+{
+  "schema_version": 1,
+  "prd_path": "<caminho do PRD>",
+  "generated_at": "<timestamp RFC 3339 UTC, definido só na primeira criação>",
+  "features": {
+    "F01": { ... },
+    "F02": { ... }
+  }
+}
+```
+
+**Estrutura por feature:**
+
+```json
+{
+  "name": "Acesso e Identificação",
+  "priority": 1,
+  "wave": 1,
+  "dependencies": [],
+  "status": "pending",
+  "cycles": 0,
+  "failure_reason": null,
+  "report_path": null,
+  "started_at": null,
+  "updated_at": "2026-05-02T14:30:00Z",
+  "completed_at": null
+}
+```
+
+**Semântica dos campos:**
+
+- `name` / `priority` / `dependencies` — copiados da tabela A.2 `Dependency Graph` do Anexo A; `wave` — copiado de A.4 `Execution Waves`. Atualizados a cada regeneração do PRD.
+- `status` — um de:
+  - `pending` (terminal) — não iniciada
+  - `implementing` (transitório) — `implement-feature` está em execução. Definido no início do Passo 5 da `implement-feature`; substituído por `implemented` quando ela termina com sucesso (ou por `fail` em caso de aborto). Raramente aparece num JSON parado — só persiste enquanto a `implement-feature` roda.
+  - `implemented` (checkpoint terminal) — `implement-feature` concluiu seu trabalho; a feature está no loop implementar → avaliar → corrigir, aguardando o veredito terminal do `evaluator`. Persiste entre invocações de skills.
+  - `done` (terminal) — o `evaluator` aprovou; o contrato foi cumprido
+  - `fail` (terminal) — o `evaluator` reprovou de forma terminal OU a `implement-feature` abortou sem recuperação OU o orquestrador esgotou o orçamento de tentativas / acionou o circuit breaker
+  - `pr-blocked` (terminal) — a feature foi implementada e validada com sucesso (avaliação limpa), mas o orquestrador não conseguiu abrir o pull request porque o merge da branch padrão do projeto na branch da feature gerou conflitos que o `fix-runner` não resolveu automaticamente. É diferente de `fail` porque a implementação em si está correta — só a integração com a main está bloqueada. A resolução é humana: fazer rebase/merge manual, push, e então reinvocar ou abrir o PR à mão.
+  - `removed` (terminal) — a feature existia numa revisão anterior do PRD, mas não está mais no PRD atual
+- `cycles` — quantidade de ciclos do `fix-runner` consumidos pela feature. Usado pela `implement-and-evaluate` para aplicar o orçamento de tentativas.
+- `failure_reason` — obrigatório quando `status: "fail"` ou `status: "pr-blocked"`. Texto curto (menos de 200 caracteres) com a causa da falha (ex.: `"3 contract item(s) failed; first: API-UPLOAD-03 — endpoint returned 500"`, `"cycle budget exhausted (5 cycles); last eval: ..."`, `"unresolvable merge conflict in apps/web/lib/session.ts, apps/backend/src/main.ts"`). Pode permanecer em `status: "removed"` como registro forense da falha anterior. `null` para os demais status (`pending`, `implementing`, `implemented`, `done`).
+- `report_path` — ponteiro opcional para o `eval-report-<ts>.md` mais recente da feature. Pode ser definido em `done` (última avaliação aprovada) ou `fail` (última avaliação reprovada) e persiste em `removed` como registro forense. `null` quando nenhuma avaliação rodou.
+- `started_at` — timestamp RFC 3339 UTC do momento em que o status saiu de `pending` pela primeira vez. `null` até lá. Volta a `null` apenas quando uma feature `removed` é ressuscitada numa nova revisão do PRD (começa um novo ciclo de vida).
+- `updated_at` — timestamp RFC 3339 UTC da última escrita nesta entrada. Sempre preenchido.
+- `completed_at` — timestamp RFC 3339 UTC definido quando o status passa a `done`. `null` nos demais casos.
+
+**Invariantes:**
+
+- Todo feature ID presente na Seção 6 do PRD DEVE existir como chave em `features`. O inverso não é exigido (entradas `removed` persistem além do PRD atual).
+- `cycles >= 0`.
+- Todo ID em `dependencies` deve existir como chave em `features` (atual ou `removed`).
+- Todos os timestamps são UTC, RFC 3339 (`2026-05-02T14:30:00Z`).
 
 ---
 
@@ -956,7 +1072,7 @@ Mais o `Appendix A: Implementation Planning` (partes A.1 a A.5), separado por `-
 
 # Appendix A: Implementation Planning
 
-> Este anexo **não faz parte do PRD**. Ele não contém requisitos de produto e não deve ser usado como fonte de escopo de negócio. Existe para alimentar as skills `spec-writer` e `implement-feature` com o grafo de dependências entre features e o sequenciamento de construção. Decisões de arquitetura e tecnologia permanecem fora daqui — elas pertencem ao HLD e ao FDD.
+> Este anexo **não faz parte do PRD**. Ele não contém requisitos de produto e não deve ser usado como fonte de escopo de negócio. Existe para registrar o grafo de dependências entre features e o sequenciamento de construção. Decisões de arquitetura e tecnologia permanecem fora daqui — elas pertencem ao HLD e ao FDD.
 
 ## A.1 Feature Data Contracts
 

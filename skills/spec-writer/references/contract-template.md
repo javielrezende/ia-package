@@ -13,7 +13,7 @@ O `contract.md` é a **interface** entre esses dois leitores. O formato abaixo �
 | Path | `docs/<feature-id>-<kebab-name>/contract.md` (irmão de `spec.md` e `plan.md`) |
 | Gerado por | `spec-writer`, na mesma execução que `spec.md` e `plan.md` |
 | Fonte da verdade | Conteúdo do PRD para esta feature: critérios de aceite da feature na Seção 11 (Seção 9 em PRDs antigos) e critérios de `Cross-Feature Integration` cujo `Owner` em `A.6 Use Scenario Coverage` é esta feature (alimentam o Coverage Manifest); mais `Capabilities`, `Experience` e `Error Handling` (alimentam a geração de itens). Irmão de `spec.md`, não derivado dele. |
-| Ciclo de vida | Somente leitura após a geração. A regeneração é integral (re-execute o `spec-writer`). Relatórios vão para outros arquivos (`eval-report.md`), nunca para este. |
+| Ciclo de vida | Somente leitura após a geração. A regeneração é integral (re-execute o `spec-writer`). Relatórios vão para outros arquivos (`eval-report-<timestamp>.md`), nunca para este. |
 | Edição manual | Não suportada. A próxima regeneração sobrescreve as edições. |
 
 ---

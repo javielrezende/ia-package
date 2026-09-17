@@ -143,7 +143,7 @@ Gere o PRD com base nas respostas da FASE 2 + contexto do projeto. Não peça ap
 - Mantenha em **inglês** apenas os elementos estruturais, porque outras skills (`spec-writer`, `implement-feature`) localizam essas âncoras no documento:
   - Os títulos das 12 seções (`## 1. Summary and Context` ... `## 12. Validation and Test Strategy`) e o título `# Appendix A: Implementation Planning`
   - Subtítulos e labels: `Glossary`, `Assumptions`, `Primary Users`, `Behavioral Profile`, `Use Scenarios`, `In Scope`, `Out of Scope`, `Non-Goals`, `Core Scope`, `Full Scope additions`, `Capabilities`, `Experience`, `Error Handling`, `Open Questions`, `Cross-Feature Integration`
-  - Cabeçalhos de tabela e labels do Anexo A: `# | Feature | Priority | Dependencies`, o valor `None`, `Consumes`, `Provides`, `Feature Data Contracts`, `Dependency Graph`, `Foundation Features`, `Execution Waves`, `Priority levels`
+  - Cabeçalhos de tabela e labels do Anexo A: `# | Feature | Priority | Dependencies`, o valor `None`, `Consumes`, `Provides`, `Feature Data Contracts`, `Dependency Graph`, `Foundation Features`, `Execution Waves`, `Priority levels`, `Use Scenario Coverage`, `UC | Features | Owner`
 - Termos consagrados do domínio (upload, e-mail, dashboard, nomes de formatos) permanecem como são, dentro do texto em português.
 - O arquivo de progresso (`prd_progress.json`) não é texto redigido: chaves e valores de `status` seguem exatamente o schema da seção "SCHEMA DO ARQUIVO DE PROGRESSO", em inglês. Apenas o `name` de cada feature é copiado do PRD como está.
 
@@ -239,7 +239,7 @@ Omita a subseção apenas se não houver nenhuma premissa (raro).
 Regras:
 - Gere um cenário por jornada realmente distinta — tipicamente 3 a 8.
 - Cubra ao menos um cenário por persona e ao menos um cenário de exceção (o caso em que algo dá errado e a pessoa precisa se recuperar).
-- Cenários atravessam features. É esperado e desejável — eles são a base dos critérios de `Cross-Feature Integration` na Seção 11.
+- Cenários atravessam features. É esperado e desejável — eles são a base dos critérios de `Cross-Feature Integration` na Seção 11 e da tabela `A.6 Use Scenario Coverage` do Anexo A.
 - Não descreva telas, cliques em componentes ou navegação interna do sistema. Descreva a intenção e o resultado.
 
 ---
@@ -464,6 +464,7 @@ Todo RNF de prioridade `Must have` gera pelo menos um critério aqui.
 - Derive um critério de cada cenário de uso da Seção 3 que atravessa mais de uma feature
 - Cada critério verifica a jornada ponta a ponta, do gatilho ao desfecho, do ponto de vista da pessoa
 - Referencie o cenário: `(UC01)`
+- Cada cenário referenciado aqui tem uma linha na tabela `A.6 Use Scenario Coverage` do Anexo A, com as features que ele atravessa e a feature dona
 
 ---
 
@@ -513,7 +514,7 @@ Após a Seção 12, emita o Anexo A, precedido de um separador `---` e do aviso 
 > Este anexo **não faz parte do PRD**. Ele não contém requisitos de produto e não deve ser usado como fonte de escopo de negócio. Existe para registrar o grafo de dependências entre features e o sequenciamento de construção. Decisões de arquitetura e tecnologia permanecem fora daqui — elas pertencem ao HLD e ao FDD.
 ```
 
-O anexo tem cinco partes. A numeração `A.1` a `A.5` é fixa: quando `A.3 Foundation Features` não se aplica e é omitida, as demais mantêm seus números — não renumere.
+O anexo tem seis partes. A numeração `A.1` a `A.6` é fixa: quando `A.3 Foundation Features` ou `A.6 Use Scenario Coverage` não se aplica e é omitida, as demais mantêm seus números — não renumere.
 
 ### A.1 Feature Data Contracts
 
@@ -608,6 +609,24 @@ Sempre inclua:
 - **3** = Could have — melhoria incremental
 ```
 
+### A.6 Use Scenario Coverage
+
+Inclua APENAS quando a Seção 11 tiver ao menos um critério em `Cross-Feature Integration`. Registra, para cada cenário de uso que atravessa mais de uma feature, quais features ele atravessa e qual delas é a **dona** do cenário — a feature em cujo contrato de verificação os critérios desse cenário serão cobertos.
+
+```markdown
+### Use Scenario Coverage
+
+| UC | Features | Owner |
+|----|----------|-------|
+| UC01 | F02, F03, F04 | F04 |
+```
+
+Regras:
+- Uma linha por cenário referenciado em `Cross-Feature Integration` (Seção 11), na ordem dos IDs `UC`.
+- `Features`: os IDs das features da Seção 6 que o cenário atravessa, separados por vírgula, na ordem da tabela A.2. Sempre dois ou mais.
+- `Owner` (cálculo mecânico, derivado da tabela A.2): entre as features listadas em `Features`, a única cujo **fecho de dependências** (a própria feature + suas dependências + as dependências delas, transitivamente) contém todas as outras features listadas. No máximo uma feature satisfaz essa condição.
+- Se nenhuma feature listada satisfizer a condição (ex.: o cenário atravessa F03 e F05, que estão em ramos diferentes do grafo), a tabela está inválida e o PRD NÃO pode ser salvo — veja a FASE 4.
+
 ---
 
 ### FASE 4: Validação (INTERNA)
@@ -626,7 +645,7 @@ ANTES de salvar, valide internamente.
 
 **Idioma:**
 - [ ] Todo o conteúdo redigido está em português (pt-BR) com acentuação correta
-- [ ] As âncoras estruturais permanecem em inglês (títulos das 12 seções e do Anexo A; `Glossary`, `Assumptions`, `Primary Users`, `Behavioral Profile`, `Use Scenarios`, `In Scope`, `Out of Scope`, `Non-Goals`, `Core Scope`, `Full Scope additions`, `Capabilities`, `Experience`, `Error Handling`, `Open Questions`, `Cross-Feature Integration`, `Consumes`, `Provides`, `Feature Data Contracts`, `Dependency Graph`, `Foundation Features`, `Execution Waves`, `Priority levels`; cabeçalhos da tabela de dependências e `None`)
+- [ ] As âncoras estruturais permanecem em inglês (títulos das 12 seções e do Anexo A; `Glossary`, `Assumptions`, `Primary Users`, `Behavioral Profile`, `Use Scenarios`, `In Scope`, `Out of Scope`, `Non-Goals`, `Core Scope`, `Full Scope additions`, `Capabilities`, `Experience`, `Error Handling`, `Open Questions`, `Cross-Feature Integration`, `Consumes`, `Provides`, `Feature Data Contracts`, `Dependency Graph`, `Foundation Features`, `Execution Waves`, `Priority levels`, `Use Scenario Coverage`; cabeçalhos da tabela de dependências, da tabela `UC | Features | Owner` e `None`)
 
 **Rastreabilidade ponta a ponta:**
 - [ ] Cada categoria de dor (Seção 2) tem ao menos uma feature (Seção 6) que a endereça
@@ -665,6 +684,13 @@ ANTES de salvar, valide internamente.
 - [ ] `Full Scope additions` só aparece em features que também têm `Core Scope`
 - [ ] Consistência de campos — todo dado nomeado em `Consumes` é coberto pela entrada `Provides` correspondente (mesmo nome, ou termo claramente mais amplo que o contém). Se não houver correspondência explícita, expanda o `Provides` para nomeá-lo em vez de depender de cobertura implícita
 - [ ] `Foundation Features` (quando presente): toda feature listada existe na tabela, em ordem topológica, com descrição da contribuição; a nota de serialização está em `Execution Waves`
+
+**Anexo A — cobertura dos cenários (A.6):**
+- [ ] `A.6 Use Scenario Coverage` está presente se, e somente se, a Seção 11 tem critérios em `Cross-Feature Integration`
+- [ ] Todo `UC` referenciado em `Cross-Feature Integration` tem exatamente uma linha em A.6, e toda linha de A.6 corresponde a um `UC` referenciado lá
+- [ ] Toda feature em `Features` existe na tabela A.2; cada linha lista duas ou mais features
+- [ ] `Owner` de cada linha é a feature listada cujo fecho de dependências (A.2) contém todas as outras features listadas
+- [ ] **Bloqueante:** toda linha tem `Owner`. Este item NÃO é corrigido automaticamente no loop de validação — ajustar dependências ou a lista de features de um cenário é decisão do usuário. Se algum cenário não tiver feature dona, pare antes de salvar, mostre o cenário, as features envolvidas e o motivo (nenhuma delas depende, direta ou transitivamente, de todas as outras), e peça ao usuário para ajustar a dependência em A.2 ou as features do cenário
 
 **Consistência do arquivo de progresso** (valida os dados que a FASE 5 vai gravar):
 - [ ] Todo feature ID da Seção 6 vai aparecer como chave em `features` do arquivo de progresso
@@ -795,6 +821,9 @@ Escreva o JSON em `{PROGRESS_PATH}.tmp` e depois renomeie para `{PROGRESS_PATH}`
 **Dependência circular detectada:**
 - Reexamine as features e quebre o ciclo identificando qual dependência é "soft" (conveniência de fluxo, não requisito de dado). Se não for possível quebrar, alerte o usuário ainda na Fase 2.
 
+**Cenário multi-feature sem feature dona (A.6):**
+- Nenhuma das features que o cenário atravessa depende, direta ou transitivamente, de todas as outras. Não invente dependência para fechar o grafo e não salve o PRD. Mostre o caso ao usuário e peça o ajuste: uma dependência real que esteja faltando em A.2, ou uma revisão das features que o cenário atravessa.
+
 **Feature com 4+ dependências:**
 - Verifique se cada uma é requisito genuíno de dado funcional, não apenas "seria bom ter antes". Mantenha só aquelas sem as quais a feature não funciona.
 
@@ -886,7 +915,7 @@ O arquivo de progresso (`prd_progress.json`) é um registro determinístico, leg
 11. Acceptance Criteria
 12. Validation and Test Strategy
 
-Mais o `Appendix A: Implementation Planning` (partes A.1 a A.5), separado por `---` e marcado como fora do PRD.
+Mais o `Appendix A: Implementation Planning` (partes A.1 a A.6), separado por `---` e marcado como fora do PRD.
 
 **Exemplo de estrutura (títulos e labels em inglês, conteúdo em português):**
 
@@ -1127,4 +1156,12 @@ As features de uma mesma wave podem ser construídas em paralelo. Uma wave só c
 - **1** = Must have — o produto não funciona sem ela
 - **2** = Should have — agrega valor significativo
 - **3** = Could have — melhoria incremental
+
+## A.6 Use Scenario Coverage
+
+### Use Scenario Coverage
+
+| UC | Features | Owner |
+|----|----------|-------|
+| UC01 | F03, F04 | F04 |
 ````

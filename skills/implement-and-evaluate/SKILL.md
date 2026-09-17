@@ -1,6 +1,6 @@
 ---
 name: implement-and-evaluate
-description: Orquestra `implement-feature` + `evaluator` + `fix-runner` num loop de verificação e retry. Roda o implementador uma vez e depois alterna o evaluator (veredito canônico) com o fix-runner (passada corretiva) até o contrato ser honrado, o retry budget se esgotar ou o circuit-breaker disparar. Persiste um journal por execução documentando cada ciclo e apontando para os eval-reports. No sucesso, commita os artefatos de avaliação, integra a branch padrão, faz push e abre o PR.
+description: Orquestra `implement-feature` + `evaluator` + `fix-runner` num loop de verificação e retry. Roda o implementador uma vez e depois alterna o evaluator (veredito canônico) com o fix-runner (passada corretiva) até o contrato ser honrado, o retry budget se esgotar ou o circuit-breaker disparar. Persiste um journal por execução documentando cada ciclo e apontando para os eval-reports. Com o override `with design review`, roda também a skill `design-review` entre o veredito limpo e o PR, corrigindo achados de UI pelo `fix-runner` Mode C. No sucesso, commita os artefatos de avaliação, integra a branch padrão, faz push e abre o PR.
 ---
 
 # Implement and Evaluate
@@ -13,7 +13,9 @@ Orquestrador ponta a ponta para levar uma feature de `spec.md + plan.md + contra
 
 O orquestrador nunca edita código. Nunca invoca nenhuma das três skills inline — toda invocação passa por um subagente `general-purpose`, para que a execução de cada skill viva na sua própria janela de contexto.
 
-As três skills são do plugin `ia-package` e são invocadas pelo nome com namespace: `ia-package:implement-feature`, `ia-package:evaluator`, `ia-package:fix-runner`.
+Com o override `with design review`, uma quarta skill entra no fluxo — **`design-review`** — rodando entre o `clean` do evaluator e a criação do PR (Step 6.5), com o `fix-runner` em Mode C como sua passada corretiva. Sem o override ela não é invocada e o fluxo é exatamente o de três skills descrito acima.
+
+As skills são do plugin `ia-package` e são invocadas pelo nome com namespace: `ia-package:implement-feature`, `ia-package:evaluator`, `ia-package:fix-runner`, `ia-package:design-review`.
 
 Somente leitura sobre o projeto, exceto pelo arquivo de journal, pelo lockfile, pela entrada da target feature no `prd_progress.json` e pelos commits dos Steps 7 e 8 descritos abaixo. Nunca modifica código, contratos, specs ou plans. Push e abertura de PR acontecem APENAS no Step 7 (fluxo de criação do PR), e só quando o loop chegou a `success` e a branch atual não é a branch padrão do projeto. Os commits do orquestrador são: os commits de artefatos de avaliação (Steps 7.2 e 7.6), o merge commit quando o único arquivo em conflito era o `prd_progress.json` (Step 7.4) e o commit dos artefatos restantes no Step 8.4, que só acontece quando o fluxo do PR já fez o commit do Step 7.2 e parou antes do Step 7.6.
 
@@ -26,7 +28,7 @@ Free-form. Mesma resolução do `implement-feature` e do `evaluator`. Formatos a
 - Arquivo dentro da pasta da feature (`docs/F03-video-upload/contract.md`).
 - Nome da feature em kebab-case ou fuzzy (`video upload`, `Video Upload`).
 
-Overrides opcionais em linguagem natural, em qualquer lugar do input. Seis são interpretados pelo orquestrador; o resto é repassado ao `implement-feature` no ciclo 0.
+Overrides opcionais em linguagem natural, em qualquer lugar do input. Oito são interpretados pelo orquestrador; o resto é repassado ao `implement-feature` no ciclo 0.
 
 | Override | Efeito |
 |---|---|
@@ -35,6 +37,8 @@ Overrides opcionais em linguagem natural, em qualquer lugar do input. Seis são 
 | `unlimited retries` | Desabilita o budget. O circuit-breaker e a guarda de 3 `gates-failed` consecutivos continuam valendo. |
 | `pause between cycles` | Espera uma resposta no chat contendo `ok` / `continue` / `segue` / `yes` entre cada ciclo. |
 | `keep eval env` | Depois de finalizar com status diferente de `success`, re-invoca o evaluator uma vez com `keep env`, para que o usuário possa inspecionar o ambiente com falha (Step 8). |
+| `with design review` | Liga o **Step 6.5**: depois do `clean` do evaluator, roda a skill `design-review` e, se ela reprovar, alterna `fix-runner` (Mode C) + `design-review` dentro de um budget próprio (default 2, ajustável com `max <N> design passes`). Sem este override o Step 6.5 não roda e nada muda. |
+| `max <N> design passes` | Budget do loop de design do Step 6.5 (default 2). Só tem efeito junto de `with design review`. |
 | `progress-path=<path>` | Path para o `prd_progress.json` do projeto. Repassado a toda invocação de sub-skill, para que as três (`implement-feature`, `evaluator`, `fix-runner`) gravem no mesmo arquivo. Se omitido, cada sub-skill descobre o arquivo de forma independente. Veja **PROGRESS TRACKING**. |
 
 Qualquer outra coisa reconhecida no input original é repassada literalmente ao prompt de invocação do `implement-feature` no ciclo 0 (ex.: `pause between phases`, `skip lint`, `stub OpenAI`, `only phases 1 and 2`). O orquestrador NÃO repassa overrides ao evaluator (exceto `keep env`, conforme acima) nem ao fix-runner — os dois rodam com seus defaults, para que o veredito e a passada corretiva fiquem reproduzíveis.
@@ -66,7 +70,7 @@ Nenhum código é escrito pelo orquestrador. As três skills delegadas produzem 
 
 Faça o parsing do input como free-form. Identifique a referência da feature e aplique a extração de overrides descrita em **INPUT**:
 
-- Reconheça os seis overrides de nível de orquestrador; registre o efeito de cada um.
+- Reconheça os oito overrides de nível de orquestrador; registre o efeito de cada um.
 - Remova-os da string de input.
 - O que sobrar vira o **`tail`**, acrescentado literalmente à invocação do `implement-feature` no ciclo 0.
 
@@ -293,7 +297,81 @@ Calcule o status final a partir de como o loop terminou:
 
 O status `pr-blocked` não é calculado aqui — ele só surge dentro do Step 7.
 
-Se o status final for `success`, prossiga para o **Step 7 — PR creation flow**. Para qualquer outro status, pule o Step 7 e vá direto ao Step 8.
+Se o status final for `success`, prossiga para o **Step 6.5** (quando `with design review` estiver ativo) e depois para o **Step 7 — PR creation flow**. Para qualquer outro status, pule o 6.5 e o Step 7 e vá direto ao Step 8.
+
+### Step 6.5 — Design loop (apenas com `with design review` e status `success`)
+
+Pulado inteiro sem o override. Pulado também quando o `contract.md` não tem seção `## UI` nem `## E2E` — a feature não tem tela para revisar; registre a linha `design review skipped: feature declares no UI surface` no journal e siga para o Step 7.
+
+Roda **depois** do `clean` do evaluator e **antes** da criação do PR: a correção estética entra no mesmo PR, e nunca antes do comportamento estar verde. `design_pass = 0`; budget default 2.
+
+**6.5.1 — Invoke `design-review`.** Crie um subagente `general-purpose`. Prompt:
+
+```
+Invoque a skill `ia-package:design-review` pela Skill tool com este input:
+
+<feature-folder>
+
+Quando a skill terminar, devolva APENAS um bloco JSON cercado por ``` seguindo este schema:
+
+{
+  "status": "pass | pass-with-findings | fail | aborted at step <N>",
+  "weighted_score": <número>,
+  "scores": {"design_quality": <N>, "originality": <N>, "craft": <N>, "functionality": <N>},
+  "confidence": "high | medium | low",
+  "report_path": "<path>",
+  "screenshots_dir": "<path ou null>",
+  "blockers": ["<M1..M6 que falharam>", ...],
+  "fix_ids": ["DSG-01", ...],
+  "abort_reason": "<texto ou null>",
+  "report_summary": "<chat report literal>"
+}
+```
+
+Acrescente ao journal: `design_pass`, kind = `design-review`, status, nota ponderada, notas por dimensão, path do relatório, IDs dos fixes.
+
+**6.5.2 — Decide.**
+
+1. `pass` → o loop de design termina em sucesso. Siga para o Step 7.
+2. `pass-with-findings` → **não** dispara correção. Termina o loop; registre os fixes pendentes no journal e no chat report como recomendação, e siga para o Step 7. Design bom o bastante não bloqueia entrega, e gastar ciclos aqui atrasa o PR por polimento.
+3. `aborted at step <N>` → o design review não conseguiu rodar (bring-up, tela em branco). **Não é regressão da feature**: registre um soft-fail, termine o loop de design e siga para o Step 7 com o status `success` intacto.
+4. `fail` → se `design_pass` < budget, siga para o 6.5.3. Sem budget, termine o loop e siga para o Step 7 com o aviso `design review failed after <N> passes (score <N.N>); shipping anyway — see <report_path>` no chat report.
+
+**O status final da execução nunca é rebaixado por este step.** O evaluator continua sendo o dono do veredito: uma feature que honra o contrato é `success` mesmo com o design reprovado. O que o 6.5 faz é tentar melhorar a tela dentro de um budget curto e deixar o rastro no PR — não segurar a entrega por uma nota estética. Quem quiser esse bloqueio o faz revisando o PR, que é onde essa decisão pertence.
+
+**6.5.3 — Invoke `fix-runner` (Mode C).** `design_pass += 1`. Subagente `general-purpose`. Prompt:
+
+```
+Invoque a skill `ia-package:fix-runner` pela Skill tool com este input:
+
+feature=<feature-folder>
+design-report=<report_path>
+cycle=<design_pass>
+<progress-path=<path>, apenas quando o orquestrador o recebeu>
+
+Quando a skill terminar, devolva APENAS um bloco JSON cercado por ``` seguindo este schema:
+
+{
+  "status": "fixed | gates-failed | aborted",
+  "commit_sha": "<SHA ou null>",
+  "files_touched": ["<path>", ...],
+  "fixes_applied": ["DSG-01", ...],
+  "fixes_skipped": ["DSG-07 (<motivo>)", ...],
+  "soft_fails": ["<linha>", ...],
+  "abort_reason": "<texto ou null>",
+  "report_summary": "<chat report literal>"
+}
+```
+
+Sem `fix-items=`: o Mode C aplica por padrão todos os fixes `blocker` e `major` e ignora os `minor`.
+
+Sub-decisões:
+
+- `fixed` → volte ao 6.5.1 para re-avaliar.
+- `gates-failed` (sem commit, working tree suja) → **pare o loop de design imediatamente** e siga para o Step 7. Um design pass que deixa gates vermelhos é pior do que a tela feia que ele ia corrigir, e a working tree suja atrapalharia o merge do 7.3. Registre soft-fail com os arquivos tocados.
+- `aborted` → pare o loop de design, registre o motivo e siga para o Step 7.
+
+**Guarda de não-regressão.** Compare a nota ponderada com a do pass anterior. Se ela **caiu**, pare o loop, registre `design regressed <N.N> → <N.N> at pass <N>; stopping` e siga para o Step 7. Iterar sobre uma correção que piorou a tela só queima budget.
 
 ### Step 7 — PR creation flow (only on `success`)
 
@@ -307,6 +385,7 @@ Faça o stage **por path explícito**, apenas destes arquivos:
 
 - Cada `eval-report-<ts>.md` cujo path foi devolvido pelos subagentes do evaluator **desta execução**. Relatórios de outras execuções que estiverem na pasta não entram.
 - A pasta `eval-screenshots-<ts>/` irmã de cada um desses relatórios, quando existir.
+- Cada `design-report-<ts>.md` e a pasta `design-screenshots-<ts>/` devolvidos pelos subagentes do Step 6.5 **desta execução**, quando o 6.5 rodou. Mesma regra: artefatos de outras execuções não entram.
 - O journal desta execução, `<feature-folder>/orchestration-<run-id>.md`, com o Cycle Log e o Cycle Detail atualizados.
 - O `prd_progress.json` localizado conforme **PROGRESS TRACKING**, quando `git status --porcelain -- <path>` mostrar mudança. Se o arquivo estiver fora do repositório ou for ignorado pelo git, não faça stage e registre em `Soft-fails`: "prd_progress.json not versioned in this repository; left out of the artifacts commit".
 
@@ -460,7 +539,10 @@ Todos os ACs in-scope foram verificados ponta a ponta pelo contract evaluator:
 - Plan: `<feature-folder>/plan.md`
 - Contract: `<feature-folder>/contract.md`
 - Latest eval-report: `<feature-folder>/eval-report-<ts>.md`
+- Latest design-report: `<feature-folder>/design-report-<ts>.md` — score `<N.N>`/10, status `<status>`
 - Orchestration journal: `<feature-folder>/orchestration-<run-id>.md`
+
+*(A linha do design-report aparece apenas quando o Step 6.5 rodou. Quando o design terminou em `fail` ou `pass-with-findings`, acrescente logo abaixo dela uma linha por fix pendente, `<DSG-NN> (<severity>) — <título>`, para que o revisor do PR veja o que ficou de fora.)*
 
 ## Closes
 
@@ -617,7 +699,7 @@ A anotação do orquestrador serve à clareza forense do JSON. O journal em `<fe
 - Rode a checagem de estado pré-execução do Step 1 contra o `prd_progress.json` (best-effort): emita o aviso de uma linha documentado quando o `status` atual da target feature for `done`, `pr-blocked`, `removed` ou `implementing`. Nunca aborte nem pergunte por causa do aviso — o orquestrador continua autônomo e deixa as sub-skills sobrescreverem conforme seus próprios contratos.
 - Adquira `<feature-folder>/.orchestrate.lock` com checagem de PID vivo antes de despachar qualquer subagente.
 - Inicialize e atualize continuamente `<feature-folder>/orchestration-<run-id>.md` conforme `references/journal-template.md`.
-- Delegue as três skills a subagentes `general-purpose` novos — um subagente por invocação de skill, uma invocação de skill por subagente. Nunca invoque as skills inline. Invoque-as pelo nome com namespace (`ia-package:implement-feature`, `ia-package:evaluator`, `ia-package:fix-runner`).
+- Delegue as sub-skills a subagentes `general-purpose` novos — um subagente por invocação de skill, uma invocação de skill por subagente. Nunca invoque as skills inline. Invoque-as pelo nome com namespace (`ia-package:implement-feature`, `ia-package:evaluator`, `ia-package:fix-runner`, `ia-package:design-review`).
 - Exija retornos JSON estruturados de cada subagente, para que o orquestrador nunca precise fazer parsing de markdown.
 - Rode o `evaluator` depois de todo passo que modifica código (implementação no ciclo 0, fix no ciclo ≥ 1, merge no Step 7). O evaluator é canônico; a prontidão preliminar do implementador não é.
 - Agregue `failed_set ∪ blocked_set` como lista de input do fix-runner. Nunca inclua itens MANUAL.
@@ -661,6 +743,8 @@ A anotação do orquestrador serve à clareza forense do JSON. O journal em `<fe
 | `pause between cycles` | Espera `ok`/`continue`/`segue`/`yes` entre cada ciclo (ciclo 0 → 1, 1 → 2 etc.). | autônomo |
 | `keep eval env` | Depois de finalizar, re-invoca o evaluator uma vez com `keep env` para que o usuário possa inspecionar um ambiente vivo com falha. Ignorado em `success`. | off |
 | `progress-path=<path>` | Path do `prd_progress.json`; repassado literalmente às três sub-skills. | auto-descoberta |
+| `with design review` | Liga o Step 6.5 (design-review + fix-runner Mode C) entre o `success` e a criação do PR. | off |
+| `max <N> design passes` | Budget do loop do Step 6.5. Só tem efeito com `with design review`. | 2 |
 
 Qualquer outra coisa reconhecida na string de input é **repassada literalmente** à invocação do `implement-feature` no ciclo 0 como parte do seu `tail`. O orquestrador não interpreta esses overrides; o implementador interpreta. Exemplos que são repassados:
 
@@ -679,6 +763,7 @@ Texto não reconhecido fica no `tail`. Se o implementador o ignorar, isso é pro
 - O circuit-breaker S2 dispara em execuções travadas.
 - A guarda de 3 `gates-failed` consecutivos (Step 5.3) termina a execução como `stuck`, inclusive sob `unlimited retries`.
 - O fix-runner recebe `failed_set ∪ blocked_set`, nunca MANUAL.
+- O Step 6.5 nunca rebaixa o status final. Uma reprovação de design vira aviso e artefato no PR, nunca um `fail` — o veredito da feature é do evaluator.
 
 ---
 

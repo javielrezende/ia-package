@@ -56,7 +56,7 @@ Cada feature selecionada PRECISA ter:
 
 ### Family 3 — Overrides repassados (por equipe, literalmente para `/implement-and-evaluate`)
 
-Qualquer coisa da gramática do `/implement-and-evaluate` que não esteja nas Families 2 e 4 é repassada literalmente à invocação de cada equipe. Exemplos: `max <N> retries`, `no retries`, `unlimited retries`, `keep eval env`, `skip lint`, `stub OpenAI`, `only phases 1 and 2`. O mesmo valor vale para todas as equipes (não há targeting por feature nesta versão).
+Qualquer coisa da gramática do `/implement-and-evaluate` que não esteja nas Families 2 e 4 é repassada literalmente à invocação de cada equipe. Exemplos: `max <N> retries`, `no retries`, `unlimited retries`, `keep eval env`, `with design review`, `max <N> design passes`, `skip lint`, `stub OpenAI`, `only phases 1 and 2`. O mesmo valor vale para todas as equipes (não há targeting por feature nesta versão).
 
 ### Family 4 — Overrides bloqueados (incompatíveis com paralelismo)
 

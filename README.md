@@ -43,20 +43,29 @@ com export opcional em JSON:
 | `spec-writer` | `spec.md` + `plan.md` + `contract.md` por feature (tem batch mode por wave) |
 | `implement-feature` | Implementa a feature fase a fase, um commit por fase, guiada pelo contrato |
 | `evaluator` | Exercita cada item do `contract.md` ponta a ponta num ambiente efêmero e grava o veredito em `eval-report-<ts>.md` |
-| `fix-runner` | Passada corretiva sobre os itens reprovados de um eval-report, ou resolução de conflitos de merge |
+| `design-review` | Avalia a qualidade visual da UI de uma feature: captura screenshots em 3 viewports e nos estados de borda, roda um piso mecânico de acessibilidade e grava notas por dimensão mais uma lista de correções em `design-report-<ts>.md` |
+| `fix-runner` | Passada corretiva sobre os itens reprovados de um eval-report, sobre os achados de um design-report, ou resolução de conflitos de merge |
 | `generate-development-guideline` | Diretriz de desenvolvimento por linguagem/stack |
 
 **Orquestração** — encadeiam as skills acima em loop, sem intervenção entre os ciclos:
 
 | Skill | Faz |
 |---|---|
-| `implement-and-evaluate` | Uma feature: implementa → avalia → corrige → reavalia até o contrato ser honrado, o retry budget acabar ou o circuit-breaker disparar. No sucesso, commita os artefatos de avaliação, integra a branch padrão, faz push e abre o PR |
+| `implement-and-evaluate` | Uma feature: implementa → avalia → corrige → reavalia até o contrato ser honrado, o retry budget acabar ou o circuit-breaker disparar. Com `with design review`, roda também um loop de design antes do PR. No sucesso, commita os artefatos de avaliação, integra a branch padrão, faz push e abre o PR |
 | `implement-and-evaluate-tmux` | Uma wave inteira em paralelo: um worktree git e uma janela tmux por feature, cada uma rodando `implement-and-evaluate` por conta própria. A sessão Main só despacha, espera e consolida |
 
 O `contract.md` é a peça que sustenta o loop: itens Given/When/Then por superfície
 (API, UI, E2E…), uma seção `Prerequisites` e um `Coverage Manifest` que liga cada
 critério de aceite do PRD aos itens que o cobrem. Quem implementa usa como checklist;
 o `evaluator` usa como asserção.
+
+O `design-review` é o eixo ortogonal: o `evaluator` responde *a feature faz o que
+prometeu?*, o `design-review` responde *a feature está apresentável?*. Nenhum bullet
+Given/When/Then captura "isso parece um template scaffoldado" — por isso a avaliação
+visual é uma skill separada, com rubrica ponderada, evidência capturada e piso mecânico
+de acessibilidade. Ela é **opt-in** no orquestrador (`with design review`): a maioria das
+features não tem UI, e qualidade de design é decisão de produto, não invariante de
+correção.
 
 ### Commands
 

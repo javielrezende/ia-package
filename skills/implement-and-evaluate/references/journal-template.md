@@ -55,12 +55,18 @@ Cada ciclo tem uma ou duas linhas: uma linha `implement-feature` (apenas no cicl
 | 1 | evaluator | `<status>` | `P=<P> F=<F> B=<B> M=<M> S=<S>` · `Δpass=+<N>/-<N>` `Δfail=+<N>/-<N>` | `eval-report-<ts2>.md` |
 | 2 | fix-runner | `<status>` | ... | — |
 | 2 | evaluator | `<status>` | ... | `eval-report-<ts3>.md` |
+| D1 | design-review | `<status>` | score `<N.N>` · DQ`<N>` O`<N>` C`<N>` F`<N>` · confidence `<high\|medium\|low>` | `design-report-<ts4>.md` |
+| D1 | fix-runner | `<status>` | design fixes applied: `<lista>` · skipped: `<lista>` · commit `<sha or none>` | — |
+| D2 | design-review | `<status>` | score `<N.N>` (`<+N.N \| -N.N>` vs D1) · ... | `design-report-<ts5>.md` |
+
+Os passes do Step 6.5 são numerados `D1`, `D2`, … em vez de continuarem a numeração de ciclo — eles rodam depois do `clean`, sobre uma feature já verde, e misturá-los com os ciclos de correção de contrato tornaria o log ilegível. As linhas `D*` só aparecem quando o override `with design review` esteve ativo.
 
 **Status vocabulary by kind:**
 
 - `implement-feature`: `success` · `completed-with-regressions` · `incomplete` · `aborted-at-phase-<N>` · `aborted-pre-phase`
 - `evaluator`: `clean` · `fail` · `fail-gate-<name>` · `pending` · `aborted-at-step-<N>` · `aborted-at-item-<ID>`
 - `fix-runner`: `fixed` · `gates-failed` · `aborted`
+- `design-review`: `pass` · `pass-with-findings` · `fail` · `aborted-at-step-<N>`
 
 ---
 
@@ -147,6 +153,15 @@ Um bloco por ciclo, em ordem cronológica. Cada bloco carrega os dados que a lin
 - `<ID>` — `<superfície>` — subjective
 
 *(none)*
+
+**Design review** *(apenas quando o Step 6.5 rodou):*
+
+- **Final status:** `<status>` — score `<N.N>`/10 after `<N>` pass(es)
+- **Reports:** `design-report-<ts>.md`, …
+- **Fixes outstanding:** `<DSG-NN> (<severity>) — <título>` · *(none)*
+- **Stop reason:** `pass alcançado | pass-with-findings (não dispara correção) | budget consumido | gates-failed no design pass | regressão de score | sem superfície de UI | abort do design-review`
+
+*(A reprovação do design NUNCA altera o Status acima — o veredito da feature é do evaluator.)*
 
 **Pull request:**
 

@@ -1,6 +1,6 @@
 ---
 name: fix-runner
-description: Passada corretiva direcionada sobre uma única feature. Use quando (1) um relatório de avaliação guiada por contrato (`eval-report-<ts>.md`) tem itens reprovados que precisam ficar verdes — lê a evidência expected/observed de cada item e edita implementação, fixtures, seeds, testes ou configs para resolvê-los; ou (2) um merge produziu conflitos na working tree — resolve os conflitos ou, se receber uma referência de PR, busca a branch base do PR, executa o merge e resolve os conflitos que aparecerem. Valida pelos quality gates e testes do projeto e produz um commit por execução (`fix(F<ID>): cycle <N> — …` nas execuções guiadas por avaliação, `merge: …` nas execuções de resolução de conflito).
+description: Passada corretiva direcionada sobre uma única feature. Use quando (1) um relatório de avaliação guiada por contrato (`eval-report-<ts>.md`) tem itens reprovados que precisam ficar verdes — lê a evidência expected/observed de cada item e edita implementação, fixtures, seeds, testes ou configs para resolvê-los; (2) um merge produziu conflitos na working tree — resolve os conflitos ou, se receber uma referência de PR, busca a branch base do PR, executa o merge e resolve os conflitos que aparecerem; ou (3) um relatório de design (`design-report-<ts>.md`, da skill `design-review`) lista correções de UI acionáveis — aplica as mudanças de apresentação sem tocar em comportamento. Valida pelos quality gates e testes do projeto e produz um commit por execução (`fix(F<ID>): cycle <N> — …` nas execuções guiadas por avaliação, `merge: …` nas de resolução de conflito, `style(F<ID>): design pass <N> — …` nas de design).
 ---
 
 # Fix Runner
@@ -9,6 +9,7 @@ Passada corretiva direcionada para uma única feature. Opera em um de dois modos
 
 - **Mode A — Fix evaluation failures.** Guiado por um `eval-report-<ts>.md` que lista itens reprovados, ou que registra um abort do evaluator na subida do ambiente (`aborted at step <N>`).
 - **Mode B — Resolve merge conflicts (PR-aware).** Guiado por um merge já em andamento na working tree, ou por uma referência de PR (nesse caso a skill busca a base do PR, executa o merge e resolve os conflitos que aparecerem).
+- **Mode C — Apply design fixes.** Guiado por um `design-report-<ts>.md` da skill `design-review`, que lista correções de UI acionáveis (`## Design fixes`). Aplica as mudanças visuais; o próximo `design-review` é o verificador canônico.
 
 A skill não refaz o trabalho de implementação por fase que produziu a feature e não verifica o resultado dos itens por conta própria — o próximo ciclo de avaliação é o verificador canônico. Somente leitura sobre `contract.md`, `spec.md`, `plan.md`, o histórico de `eval-report-*.md` e quaisquer pastas de features irmãs. Só altera código de produção, testes, fixtures, seeds, configs e o objeto de commit (além do campo `cycles` descrito em **PROGRESS TRACKING**).
 
@@ -18,7 +19,8 @@ Free-form. O modo é selecionado pelo formato do input:
 
 - `eval-report=` + `failed-items=` → **Mode A**.
 - `pr=` ou `conflicted-files=` → **Mode B**.
-- Campos dos dois modos misturados → aborte nomeando os campos conflitantes.
+- `design-report=` → **Mode C**.
+- Campos de mais de um modo misturados → aborte nomeando os campos conflitantes.
 
 ### Campos do Mode A
 
@@ -59,6 +61,23 @@ feature=F03 pr=42 cycle=2
 feature=F03 conflicted-files=apps/web/lib/session.ts,apps/backend/src/main.ts cycle=2
 ```
 
+### Campos do Mode C
+
+- **feature** — mesma resolução do Mode A.
+- **design-report** — path para o `design-report-<ts>.md`. Precisa existir e ficar dentro da pasta da feature resolvida.
+- **fix-items** (opcional) — lista de IDs `DSG-<NN>` separados por vírgula ou espaço. Quando ausente, a skill aplica **todos** os fixes de severidade `blocker` e `major` do relatório e ignora os `minor`. Quando presente, aplica exatamente os IDs nomeados, em qualquer severidade.
+- **cycle**, **progress-path** — iguais ao Mode A.
+
+Exemplos:
+
+```
+feature=F03 design-report=docs/F03-video-upload/design-report-2026-05-01T16-40-02Z.md cycle=1
+```
+
+```
+feature=F03 design-report=docs/F03-video-upload/design-report-2026-05-01T16-40-02Z.md fix-items=DSG-01,DSG-04 cycle=2
+```
+
 Se qualquer campo obrigatório do modo selecionado estiver ausente ou não puder ser resolvido → aborte nomeando o campo.
 
 ## OUTPUT
@@ -75,6 +94,8 @@ Items targeted: <ID-1>, <ID-2>, ...        (Mode A)
 Evaluator abort: step <N> — <motivo>        (Mode A com failed-items vazio)
 PR: <ref> (<head> ← <base>)                 (Mode B com pr=)
 Conflicted files: <lista>                   (Mode B)
+Design fixes applied: <DSG-01>, <DSG-04>    (Mode C)
+Design fixes skipped: <DSG-07> (<motivo>)   (Mode C)
 Files touched: <lista>
 Commit: <SHA> | (none)
 
@@ -252,6 +273,44 @@ Na variante limpa, o `git merge` já produziu um merge commit padrão antes dest
 
 ---
 
+### Step 9 — Mode C (apply design fixes)
+
+Quando o Step 1 detectar o Mode C, siga este fluxo em vez dos Steps 2–7.
+
+**Carregue o contexto.** Leia o `design-report-<ts>.md` informado e extraia:
+
+- A linha `**Calibration:**` — `design-system` significa que as correções precisam usar os tokens e componentes existentes do projeto; `greenfield` dá mais liberdade.
+- A seção `## Design fixes`, lida por título literal: cada bloco `### DSG-<NN>` até a próxima seção `##`. De cada bloco, leia `Severity`, `Dimension`, `Evidence`, `Observed` e `Change`.
+- A seção `## Mechanical floor` — todo `✗` em M1–M6 é um blocker de acessibilidade e tem prioridade sobre qualquer fix estético.
+
+Selecione os fixes a aplicar: os IDs de `fix-items=` quando informado; caso contrário, todos os `blocker` e `major`. Se a seleção ficar vazia (relatório sem fixes, ou `fix-items=` nomeando IDs inexistentes), aborte com `"no applicable design fixes in <report>"`.
+
+Leia também os artefatos de design do projeto antes de editar: tokens, tema, biblioteca de componentes e as telas irmãs já existentes. **Uma correção que resolve o achado introduzindo um valor hardcoded fora do sistema não é uma correção** — troca um achado por outro que o próximo `design-review` vai registrar como desvio.
+
+**Aplique.** Um fix por vez, na ordem do relatório (blockers primeiro). Para cada um:
+
+1. Localize o elemento pela `Evidence` (seletor ou região) e pelo componente correspondente na codebase.
+2. Aplique a mudança descrita em `Change`, expressa nos tokens e nas convenções do projeto.
+3. Se o `Change` não for aplicável como escrito (o componente é de terceiros e não aceita a prop, o token não existe, a mudança brigaria com uma tela irmã), **pule o fix** e registre em `Design fixes skipped` com o motivo. Não improvise uma variante distante do que foi pedido.
+
+**Anti-escopo.** O Mode C altera apresentação: estilos, classes, tokens, markup de layout, copy de estados vazios/erro, atributos de acessibilidade. **Não altera lógica de negócio, chamadas de API, schema nem os itens do `contract.md`** — se um fix parece exigir isso, ele está mal especificado: pule e registre. Um design pass jamais pode regredir um item que o `evaluator` já deu como verde.
+
+**Valide** do mesmo jeito que no Step 5 (gates + testes com budget de 3 tentativas). Uma regressão nos testes aqui quase sempre significa que uma asserção dependia de um seletor ou de um texto que o fix mudou: atualize a asserção quando o teste estiver acoplado à apresentação, e reverta o fix quando ele tiver de fato quebrado comportamento.
+
+**Commit.**
+
+```
+style(F<ID>): design pass <N> — apply <DSG-01>, <DSG-04>
+```
+
+Mesmas restrições do Step 6: stage por nome de arquivo, sem `--no-verify`, sem amend, sem push, um commit por invocação. Nunca faça stage de `design-report-*.md` nem de `design-screenshots-*/`.
+
+**Reporte** no formato do Step 7, com `Items targeted` substituído por `Design fixes applied` e `Design fixes skipped`. `fixed` significa que ao menos um fix foi aplicado e commitado com gates e testes verdes.
+
+**A verificação é do `design-review`.** Esta skill não repontua a tela nem declara o achado resolvido — a próxima execução do `design-review` é o verificador canônico, exatamente como o `evaluator` é no Mode A.
+
+---
+
 ## PROGRESS TRACKING
 
 Esta skill incrementa o contador `cycles` num arquivo compartilhado `prd_progress.json` a cada execução, restrito à entrada da target feature. O arquivo é o registro determinístico do estado das features ao longo do pipeline `implement-feature` → `evaluator` → `fix-runner`. O schema é canônico na skill `prd-writer-for-complete-project` (seção "SCHEMA DO ARQUIVO DE PROGRESSO"); esta seção documenta apenas as escritas desta skill.
@@ -297,6 +356,8 @@ O incremento acontece no **início** do trabalho, não no final. Uma execução 
 - Respeite a governança documentada do projeto para os tipos de artefato sendo editados.
 - Descubra os comandos de validação em runtime: gates pela seção `## Quality gates` do contrato (ou pela documentação do projeto, se ausente), testes pelos manifests/scripts do projeto.
 - Quando o relatório estiver em `fail (gate <name>)`, trate o gate `<name>` como alvo da correção: ele precisa ficar verde para haver commit.
+- No Mode C, leia a `**Calibration:**` do design-report e os tokens/componentes do projeto antes de editar; expresse toda correção no vocabulário do design system existente.
+- No Mode C, pule e registre qualquer fix que não seja aplicável como escrito, em vez de improvisar uma variante.
 - Faça stage apenas de arquivos específicos ao commitar.
 - Produza exatamente um commit por invocação bem-sucedida, na branch atual.
 - Pare no retry budget interno (default 3) e reporte `gates-failed` em vez de commitar uma árvore vermelha.
@@ -308,8 +369,10 @@ O incremento acontece no **início** do trabalho, não no final. Uma execução 
 - Modifique `status`, `failure_reason`, `report_path`, `started_at` ou `completed_at` no `prd_progress.json`. Só `cycles` e `updated_at` são gravados.
 - Modifique qualquer entrada de feature no `prd_progress.json` além da entrada da target feature. Nunca modifique os campos de primeiro nível.
 - Modifique pastas de outras features. A skill é restrita à feature.
-- Modifique qualquer `eval-report-*.md` anterior.
-- Faça stage do `prd_progress.json`, de `eval-report-*.md` ou de `eval-screenshots-*/`.
+- Modifique qualquer `eval-report-*.md` ou `design-report-*.md` anterior.
+- Faça stage do `prd_progress.json`, de `eval-report-*.md`, de `eval-screenshots-*/`, de `design-report-*.md` ou de `design-screenshots-*/`.
+- No Mode C, altere lógica de negócio, chamadas de API, schema ou o `contract.md` para satisfazer um fix estético. Um design pass nunca regride um item que o `evaluator` já deu como verde.
+- No Mode C, repontue a tela ou declare um achado resolvido. O verificador canônico é a próxima execução do `design-review`.
 - Crie / troque / apague branches. Faça push. Abra PRs.
 - Pule git hooks (`--no-verify`) ou contorne assinatura.
 - Adicione testes novos. Asserções novas pertencem ao contrato.
@@ -339,6 +402,9 @@ Overrides não reconhecidos ou contraditórios → o default vence; registre em 
 - **`failed-items` vazio com relatório em `aborted at step <N>`** — caso válido: diagnostique pelo `## Abort reason` (Steps 2–3) e commite com a variante `address evaluator abort at step <N>`. Com qualquer outro status, lista vazia é campo obrigatório ausente → aborte.
 - **Relatório em `fail (gate <name>)`** — todos os itens estão `BLOCKED — run aborted at gates: <name>`. Diagnostique pelo gate que falhou (Step 3), não pelos Prerequisites; o gate precisa ficar verde no Step 5 para haver commit.
 - **Todos os itens alvo são `MANUAL`** — aborte: "all targeted items are subjective (`MANUAL`); fix-runner can't auto-fix manual items".
+- **O path do design-report aponta para outra feature** — aborte: "design-report belongs to `<other-feature>`; refusing to mix".
+- **Design-report em `pass` sem nenhum fix** — aborte: "no applicable design fixes in `<report>`". Não é falha; é alvo errado.
+- **Fix de design exigiria mudar comportamento** (ex.: `Change` pede paginação onde não há endpoint) — pule, registre em `Design fixes skipped` com o motivo e siga. O caminho certo é uma mudança de contrato via `spec-writer`, não uma edição escondida num design pass.
 - **Todos os `failed-items` estão BLOCKED no mesmo Prerequisite** — corrija o Prerequisite uma vez; a correção provavelmente desbloqueia todos numa única edição.
 - **A correção exigiria modificar `contract.md` / `spec.md` / `plan.md`** — aborte: "the fix would require contract/spec/plan changes; that is a feature-triple revision, not a corrective pass. Re-author the triple and re-invoke."
 - **Mudança de schema necessária** — edite a fonte do schema do projeto (Seção 4 do `spec.md` ou documentação do projeto) e registre um soft-fail orientando o usuário a rodar o comando de migration do projeto (descoberto na Seção 4 do `spec.md`, em `CLAUDE.md` / `harness/` / `README*` ou nos manifests) depois que esta skill terminar. Não tente rodar a migration se o comando for interativo.

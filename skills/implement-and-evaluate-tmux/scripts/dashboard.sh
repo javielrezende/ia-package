@@ -37,7 +37,14 @@ foundation=$(get_meta foundation_features)
 selected=$(get_meta selected_features)
 
 # --- Cabeçalho ---
-elapsed_str=$(fmt_elapsed $(( $(date -u +%s) - $(iso_to_epoch "$started_at") )))
+# iso_to_epoch devolve 0 em entrada vazia ou não parseável. Sem a guarda, a
+# subtração usaria a epoch como início e o painel mostraria algo como 489000h00m.
+wave_s0=$(iso_to_epoch "$started_at")
+if [ "$wave_s0" -gt 0 ]; then
+    elapsed_str=$(fmt_elapsed $(( $(date -u +%s) - wave_s0 )))
+else
+    elapsed_str="-"
+fi
 
 printf 'Wave %s - run %s\n' "$wave_tag" "$run_id"
 printf 'Início: %s · decorrido: %s · max-parallel=%s · team-timeout=%s · permission-mode=%s\n' \
@@ -103,10 +110,12 @@ for pair in "${pairs[@]}"; do
         fi
     fi
 
-    # Tempo decorrido da equipe.
-    if [ -n "$started" ]; then
-        end_ref="${finished:-$(now_iso)}"
-        elapsed_team=$(fmt_elapsed $(( $(iso_to_epoch "$end_ref") - $(iso_to_epoch "$started") )))
+    # Tempo decorrido da equipe. Mesma guarda do cabeçalho: qualquer uma das duas
+    # pontas não parseável (ou ausente) imprime "-" em vez de um número absurdo.
+    team_s0=$(iso_to_epoch "$started")
+    team_s1=$(iso_to_epoch "${finished:-$(now_iso)}")
+    if [ "$team_s0" -gt 0 ] && [ "$team_s1" -gt 0 ]; then
+        elapsed_team=$(fmt_elapsed $(( team_s1 - team_s0 )))
     else
         elapsed_team="-"
     fi

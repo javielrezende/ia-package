@@ -1,8 +1,8 @@
 # ia-package
 
 Plugin do Claude Code com um pipeline de documentação técnica assistida por IA:
-entrevistas guiadas que produzem **PRD → HLD → FDD → spec/plan → implementação →
-ADRs → diagramas C4/Mermaid**.
+entrevistas guiadas que produzem **PRD → HLD → FDD → spec/plan/contract →
+implementação → avaliação → correção → ADRs → diagramas C4/Mermaid**.
 
 Os documentos são gerados em português (pt-BR).
 
@@ -39,10 +39,24 @@ com export opcional em JSON:
 
 | Skill | Produz |
 |---|---|
-| `prd-writer-for-complete-project` | PRD do produto inteiro, só de negócio: 12 seções + `Appendix A` de planejamento |
-| `spec-writer` | `spec.md` + `plan.md` por feature (tem batch mode por wave) |
-| `implement-feature` | Implementa a feature fase a fase, um commit por fase |
+| `prd-writer-for-complete-project` | PRD do produto inteiro, só de negócio: 12 seções + `Appendix A` de planejamento, mais o `prd_progress.json` que o resto do pipeline usa como registro de estado |
+| `spec-writer` | `spec.md` + `plan.md` + `contract.md` por feature (tem batch mode por wave) |
+| `implement-feature` | Implementa a feature fase a fase, um commit por fase, guiada pelo contrato |
+| `evaluator` | Exercita cada item do `contract.md` ponta a ponta num ambiente efêmero e grava o veredito em `eval-report-<ts>.md` |
+| `fix-runner` | Passada corretiva sobre os itens reprovados de um eval-report, ou resolução de conflitos de merge |
 | `generate-development-guideline` | Diretriz de desenvolvimento por linguagem/stack |
+
+**Orquestração** — encadeiam as skills acima em loop, sem intervenção entre os ciclos:
+
+| Skill | Faz |
+|---|---|
+| `implement-and-evaluate` | Uma feature: implementa → avalia → corrige → reavalia até o contrato ser honrado, o retry budget acabar ou o circuit-breaker disparar. No sucesso, commita os artefatos de avaliação, integra a branch padrão, faz push e abre o PR |
+| `implement-and-evaluate-tmux` | Uma wave inteira em paralelo: um worktree git e uma janela tmux por feature, cada uma rodando `implement-and-evaluate` por conta própria. A sessão Main só despacha, espera e consolida |
+
+O `contract.md` é a peça que sustenta o loop: itens Given/When/Then por superfície
+(API, UI, E2E…), uma seção `Prerequisites` e um `Coverage Manifest` que liga cada
+critério de aceite do PRD aos itens que o cobrem. Quem implementa usa como checklist;
+o `evaluator` usa como asserção.
 
 ### Commands
 
@@ -67,8 +81,8 @@ Rodam sozinhos, sem invocação. Ficam em silêncio quando não têm nada a dize
 
 | Evento | Script | Para quê |
 |---|---|---|
-| `SessionStart` | `pipeline-status.sh` | Diz ao Claude, já na abertura da sessão, quais artefatos do pipeline já existem e qual é o próximo passo |
-| `PostToolUse` (Write\|Edit) | `flag-open-gaps.sh` | Aponta ao Claude `[NEEDS INPUT]`, `TBD` e `<preencher>` deixados em documentos de `docs/` |
+| `SessionStart` | `pipeline-status.sh` | Diz ao Claude, já na abertura da sessão, quais artefatos do pipeline já existem (incluindo contratos, eval-reports e journals por feature) e como está o tally de status do `prd_progress.json` |
+| `PostToolUse` (Write\|Edit) | `flag-open-gaps.sh` | Aponta ao Claude `[NEEDS INPUT]`, `TBD` e `<preencher>` deixados em documentos de `docs/`. Ignora os artefatos gerados pelo loop (`eval-report-*`, `orchestration-*`, `wave-status.md`), onde um `TBD` citado como evidência é conteúdo legítimo |
 | `SubagentStop` | hook do tipo `prompt` | Confere, pela mensagem final, se os agentes geradores relataram os artefatos que prometeram |
 
 Os dois primeiros são hooks de comando (bash + python3, sem dependências externas);

@@ -32,7 +32,7 @@ Overrides opcionais em linguagem natural, em qualquer lugar do input. Seis são 
 |---|---|
 | `max <N> retries` | Define o retry budget do orquestrador (default 3). |
 | `no retries` | Define o budget como 0 (um ciclo só — implementação inicial + um evaluator). |
-| `unlimited retries` | Desabilita o budget. O circuit-breaker continua valendo. |
+| `unlimited retries` | Desabilita o budget. O circuit-breaker e a guarda de 3 `gates-failed` consecutivos continuam valendo. |
 | `pause between cycles` | Espera uma resposta no chat contendo `ok` / `continue` / `segue` / `yes` entre cada ciclo. |
 | `keep eval env` | Depois de finalizar com status diferente de `success`, re-invoca o evaluator uma vez com `keep env`, para que o usuário possa inspecionar o ambiente com falha (Step 8). |
 | `progress-path=<path>` | Path para o `prd_progress.json` do projeto. Repassado a toda invocação de sub-skill, para que as três (`implement-feature`, `evaluator`, `fix-runner`) gravem no mesmo arquivo. Se omitido, cada sub-skill descobre o arquivo de forma independente. Veja **PROGRESS TRACKING**. |
@@ -221,7 +221,9 @@ Aplique esta árvore de decisão, na ordem:
 
 3. **`status == "aborted-at-item-<ID>"`** com motivo `pause-on-first-failure` (só é possível se um override vazou — o orquestrador nunca deveria tê-lo definido) → terminal `aborted`. Vá para o Step 6.
 
-4. **Circuit breaker (S2):** se `cycle ≥ 1` E `failed_set == last_failed_set` E `len(passed_delta) == 0` E `len(failed_set) > 0` → terminal `stuck`. Vá para o Step 6. O implementador + o fixer não estão convergindo; mais ciclos desperdiçam budget.
+4. **Circuit breaker (S2):** se `cycle ≥ 1` E **esta decisão está sendo tomada sobre uma avaliação real deste ciclo** E `failed_set == last_failed_set` E `len(passed_delta) == 0` E `len(failed_set) > 0` → terminal `stuck`. Vá para o Step 6. O implementador + o fixer não estão convergindo; mais ciclos desperdiçam budget.
+
+   A primeira condição é o que impede o breaker de disparar por falta de dados. Ele só julga o que um evaluator de fato observou: numa reaplicação sintética do 5.2 depois de um `gates-failed` (veja o 5.3), nenhuma avaliação rodou, e a igualdade dos conjuntos é consequência da ausência de dados novos, não evidência de não-convergência. Nesse caminho, pule este ramo.
 
 5. **Checagem do retry budget:** se `cycle == retry_budget` → terminal `exhausted`. Vá para o Step 6.
 
@@ -270,8 +272,11 @@ Receba o JSON. Acrescente ao journal: número do ciclo, kind = `fix-runner`, sta
 **Sub-decisões:**
 
 - `fixed` (commit produzido) → volte ao 5.1 com o mesmo `cycle` (a próxima execução do evaluator faz parte do ciclo `cycle`).
-- `gates-failed` (sem commit; working tree suja) → o ciclo é um retry "desperdiçado". Conta contra o budget. Pule a próxima execução do evaluator — não há nada novo a verificar — e vá direto ao Step 5.2 da próxima iteração com o mesmo `last_failed_set` (nenhuma avaliação rodou, então não há dados novos; a checagem de budget ou o circuit breaker podem encerrar a execução aqui).
-  - Nota de implementação: modele isso como uma reaplicação imediata da lógica do Step 5.2 com dados sintéticos: finja que o status do evaluator não mudou e deixe o ramo 4 (circuit breaker — mesmo `failed_set`, nenhum `passed_delta`) disparar se aplicável; caso contrário, o ramo 5 (checagem de budget) acaba encerrando a execução como `exhausted`.
+- `gates-failed` (sem commit; working tree suja) → o ciclo é um retry "desperdiçado". Conta contra o budget. Pule a próxima execução do evaluator — não há nada novo a verificar — e vá direto ao Step 5.2 da próxima iteração com o mesmo `last_failed_set`.
+  - **O circuit-breaker (ramo 4) NÃO se aplica neste caminho**, pela primeira condição do próprio ramo: nenhuma avaliação rodou neste ciclo. Vá direto ao ramo 5 (checagem de budget). Com budget restante, despache outro ciclo de fix-runner (5.3) com o **mesmo** `eval-report` e a **mesma** lista de `failed-items` da última avaliação real. Sem budget, termine `exhausted`.
+  - Nota de implementação: modele como uma reaplicação imediata da lógica do Step 5.2 com o ramo 4 desabilitado só para esta iteração. NÃO atualize `last_failed_set` nem `last_passed_set` — eles continuam apontando para a última avaliação real, e o próximo evaluator que de fato rodar vai compará-los contra dados frescos, com o breaker valendo normalmente de novo.
+  - Justificativa: a passada corretiva não é determinística. O fix-runner esgotou seu budget interno de 3 tentativas, mas uma nova leitura da mesma evidência pode atacar a causa por outro ângulo. Gastar o budget que o usuário pediu antes de desistir é a escolha deliberada aqui; o custo é limitado pelo próprio budget.
+  - **Guarda de `gates-failed` consecutivos (limite fixo: 3).** Mantenha um contador `consecutive_gates_failed`, incrementado a cada `gates-failed` e **zerado sempre que um evaluator de fato rodar**. Ao atingir 3, termine `stuck` com o motivo `"3 consecutive gates-failed cycles; no evaluation ran since cycle <N>"`, mesmo que ainda haja budget. Esta guarda é o que impede uma execução com `unlimited retries` de girar para sempre: sem budget e sem breaker (que aqui não se aplica), ela é o único piso. Não pode sofrer override.
 - `aborted` (ex.: apenas itens MANUAL, ou a correção exigiria mudanças no contrato) → terminal `aborted`. Acrescente ao journal o motivo do abort do fix-runner e vá para o Step 6.
 
 Se os overrides do usuário incluírem `pause between cycles`, espere `ok` / `continue` / `segue` / `yes` antes de voltar ao 5.1.
@@ -282,7 +287,7 @@ Calcule o status final a partir de como o loop terminou:
 
 - `success` — `clean` alcançado.
 - `manual-pending` — restaram apenas itens MANUAL.
-- `stuck` — o circuit-breaker disparou.
+- `stuck` — o circuit-breaker disparou, ou a guarda de `gates-failed` consecutivos (Step 5.3) atingiu 3.
 - `exhausted` — budget consumido sem sucesso.
 - `aborted` — abort pré-fase, abort do fix-runner ou abort do evaluator por override.
 
@@ -584,10 +589,10 @@ Toda escrita de status é: ler → modificar apenas a entrada da target feature 
   - `completed_at` ← `null` (quando o status anterior era `done`; mantém o invariante `completed_at` ≠ null ⇔ status == `done`)
   - `failure_reason` ← `"cycle budget exhausted (<N> cycles); last: <failure_reason anterior ou "no prior failure_reason">"` (≤200 caracteres; trunque o motivo anterior se necessário)
   - `updated_at` ← now
-- **`stuck`** (circuit-breaker S2: mesmo conjunto FAIL, zero delta de PASS) →
+- **`stuck`** (circuit-breaker S2, ou a guarda de `gates-failed` consecutivos do Step 5.3) →
   - `status` ← `"fail"` (quando ainda não for `fail`)
   - `completed_at` ← `null` (quando o status anterior era `done`)
-  - `failure_reason` ← `"circuit breaker: same FAIL set across cycles <N-1> and <N>, no PASS delta"`
+  - `failure_reason` ← `"circuit breaker: same FAIL set across cycles <N-1> and <N>, no PASS delta"` — ou, quando o término veio da guarda, `"3 consecutive gates-failed cycles; no evaluation ran since cycle <N>"`
   - `updated_at` ← now
 - **`aborted`** (qualquer término via abort pré-fase do Step 4, abort do fix-runner ou abort do evaluator por override) →
   - `status` ← `"fail"` (quando ainda não for `fail`; em aborts pré-fase o `implement-feature` já gravou `fail`)
@@ -616,7 +621,8 @@ A anotação do orquestrador serve à clareza forense do JSON. O journal em `<fe
 - Exija retornos JSON estruturados de cada subagente, para que o orquestrador nunca precise fazer parsing de markdown.
 - Rode o `evaluator` depois de todo passo que modifica código (implementação no ciclo 0, fix no ciclo ≥ 1, merge no Step 7). O evaluator é canônico; a prontidão preliminar do implementador não é.
 - Agregue `failed_set ∪ blocked_set` como lista de input do fix-runner. Nunca inclua itens MANUAL.
-- Aplique o circuit-breaker S2 com rigor: mesmo conjunto FAIL + zero delta de PASS = parar, sem mais retry.
+- Aplique o circuit-breaker S2 com rigor sobre avaliações reais: mesmo conjunto FAIL + zero delta de PASS = parar, sem mais retry. Um ciclo em que o fix-runner devolveu `gates-failed` não tem avaliação para julgar — ele consome budget e segue pelo ramo 5, sem passar pelo breaker.
+- Mantenha o contador `consecutive_gates_failed` do Step 5.3, zerando-o sempre que um evaluator rodar, e termine `stuck` ao chegar a 3. É o único piso de uma execução com `unlimited retries`.
 - Respeite exatamente os overrides de nível de orquestrador (`max N retries`, `no retries`, `unlimited retries`, `pause between cycles`, `keep eval env`, `progress-path=<path>`) e repasse todo o resto ao prompt do implementador no ciclo 0.
 - Libere o lockfile em qualquer caminho de término, incluindo aborts.
 - Repasse `progress-path=<path>` a todo prompt de subagente de sub-skill quando o receber como input, para que `implement-feature`, `evaluator` e `fix-runner` gravem no mesmo `prd_progress.json`. Grave `status="fail"` + `failure_reason` de nível de orquestrador conforme **PROGRESS TRACKING** no Step 8 nos casos `exhausted` / `stuck` / `aborted`; grave `status="pr-blocked"` + `failure_reason` no caso `pr-blocked`.
@@ -651,7 +657,7 @@ A anotação do orquestrador serve à clareza forense do JSON. O journal em `<fe
 |---|---|---|
 | `max <N> retries` | Define o retry budget. `N` é um inteiro não negativo. | 3 |
 | `no retries` | Equivale a `max 0 retries`. | — |
-| `unlimited retries` | Desabilita o budget. O circuit-breaker continua valendo. | — |
+| `unlimited retries` | Desabilita o budget. O circuit-breaker e a guarda de 3 `gates-failed` consecutivos continuam valendo. | — |
 | `pause between cycles` | Espera `ok`/`continue`/`segue`/`yes` entre cada ciclo (ciclo 0 → 1, 1 → 2 etc.). | autônomo |
 | `keep eval env` | Depois de finalizar, re-invoca o evaluator uma vez com `keep env` para que o usuário possa inspecionar um ambiente vivo com falha. Ignorado em `success`. | off |
 | `progress-path=<path>` | Path do `prd_progress.json`; repassado literalmente às três sub-skills. | auto-descoberta |
@@ -671,6 +677,7 @@ Texto não reconhecido fica no `tail`. Se o implementador o ignorar, isso é pro
 - O lockfile é adquirido e liberado.
 - O journal é persistido.
 - O circuit-breaker S2 dispara em execuções travadas.
+- A guarda de 3 `gates-failed` consecutivos (Step 5.3) termina a execução como `stuck`, inclusive sob `unlimited retries`.
 - O fix-runner recebe `failed_set ∪ blocked_set`, nunca MANUAL.
 
 ---
@@ -682,7 +689,8 @@ Texto não reconhecido fica no `tail`. Se o implementador o ignorar, isso é pro
 - **Implementador aborta pré-fase (dependências ausentes, contrato vazio etc.)** → terminal `aborted`. Sem evaluator. Sem ciclo de fix. O journal registra o abort com o motivo do implementador.
 - **Evaluator aborta no step 1 (resolução do input)** quando chamado pelo orquestrador → inesperado (o orquestrador já resolveu o input). Trate como `aborted` e registre o diagnóstico do evaluator.
 - **Evaluator aborta no step 4 (falha no bring-up)** → o fix-runner é despachado com `failed-items=` (vazio) e o path do relatório; o fix-runner lê o `## Abort reason` do relatório para diagnosticar. Caso comum (migration quebrada introduzida pelo implementador).
-- **Fix-runner retorna `gates-failed`** → sem reexecução do eval nesta iteração; o ciclo conta como consumido; o loop só continua se houver budget E o circuit-breaker não tiver disparado. Se nem o budget nem o delta de PASS mudaram, o circuit-breaker da próxima iteração vai disparar (mesmo `failed_set`, zero delta de PASS).
+- **Fix-runner retorna `gates-failed`** → sem reexecução do eval nesta iteração; o ciclo conta como consumido; o circuit-breaker não se aplica (não houve avaliação para julgar). O loop continua enquanto houver budget, despachando outro ciclo de fix-runner sobre o mesmo eval-report e a mesma lista de itens. É intencional: só uma avaliação real pode afirmar que a execução parou de convergir. O fim vem por uma de duas portas: o budget se esgota (`exhausted`) ou a guarda de 3 `gates-failed` consecutivos dispara (`stuck`) — o que vier primeiro.
+- **`unlimited retries` com o fix-runner preso em `gates-failed`** → sem budget para esgotar e sem breaker neste caminho, quem encerra é a guarda de 3 consecutivos do Step 5.3, com status `stuck`. Sem ela a execução giraria indefinidamente.
 - **Fix-runner retorna `aborted` porque a correção exigiria mudanças no contrato** → terminal `aborted`. O journal registra o motivo. O usuário precisa regenerar o spec/contrato via `spec-writer`.
 - **Vários eval-reports gravados num mesmo ciclo** (ex.: o usuário re-roda o evaluator manualmente no meio do ciclo) → o orquestrador usa apenas o path de relatório devolvido pelo seu próprio subagente de evaluator; relatórios estranhos na pasta são ignorados e nunca entram nos commits de artefatos.
 - **Lockfile obsoleto (processo caiu no meio da execução)** → o orquestrador sobrescreve e prossegue; registra em `Soft-fails`. O journal anterior fica intacto (re-execuções produzem um novo journal com timestamp — journals antigos são histórico imutável).

@@ -45,6 +45,8 @@ Listas sem entradas colapsam para uma única linha em itálico `*(none)*`.
 
 Cada ciclo tem uma ou duas linhas: uma linha `implement-feature` (apenas no ciclo 0) ou uma linha `fix-runner` (ciclos ≥ 1), seguida de uma linha `evaluator` que fecha o ciclo. As linhas são acrescentadas conforme acontecem; NÃO reordene.
 
+**Ciclo sem linha de evaluator:** quando o fix-runner devolve `gates-failed`, ele não commita nada e o evaluator não roda — não há código novo para verificar. Esse ciclo fica com uma linha só, a do fix-runner. É o formato correto; não invente uma linha de evaluator para "fechar" o ciclo.
+
 | # | Kind | Status | Counts / Notes | Artifact |
 |---|---|---|---|---|
 | 0 | implement-feature | `<status>` | phases `<X>/<Y>` committed | — |
@@ -97,6 +99,7 @@ Um bloco por ciclo, em ordem cronológica. Cada bloco carrega os dados que a lin
 - Files touched: `<lista>`
 - Soft-fails: `<lista ou none>`
 - Abort reason (if any): `<texto ou none>`
+- Evaluator this cycle: `ran` · `skipped (gates-failed — no commit to verify; circuit-breaker not applied)`
 
 **evaluator**
 
@@ -181,7 +184,7 @@ Um bloco por ciclo, em ordem cronológica. Cada bloco carrega os dados que a lin
 - **Formato do run-id**: ISO 8601 normalizado para forma segura em nome de arquivo, ex.: `2026-05-01T17-32-04Z`. A mesma string aparece no nome do arquivo, na linha `**Run:**` e em toda referência a esta execução. O orquestrador nunca reutiliza um run-id.
 - **Escritas incrementais**: grave o header no Step 3 (inicialização). Depois de cada ciclo, acrescente a nova linha na tabela **Cycle Log** e um novo bloco em **Cycle Detail**. O **Final Verdict** e os **Soft-fails** de nível de execução são preenchidos no Step 7.6 quando o status é `success` e o fluxo de PR chega até lá (antes do último commit de artefatos e do push); em todos os outros caminhos, no Step 8. A seção **keep eval env** é preenchida no Step 8, quando aplicável.
 - **Cálculo dos deltas**: os deltas do bloco **Cycle Detail** são calculados contra a saída do evaluator do ciclo **anterior** (conjuntos de IDs de itens), não contra o ciclo 0, a menos que o anterior seja o ciclo 0. Os grupos "still failing" e "new failures" juntos precisam ser iguais ao `failed_set ∪ blocked_set` do ciclo atual.
-- **Linha do circuit-breaker**: aparece em todo bloco de evaluator a partir do ciclo 1. Sempre preencha; a árvore de decisão do orquestrador depende desse sinal.
+- **Linha do circuit-breaker**: aparece em todo bloco de evaluator a partir do ciclo 1. Sempre preencha; a árvore de decisão do orquestrador depende desse sinal. Num ciclo `gates-failed` não há bloco de evaluator e, portanto, não há linha de circuit-breaker — quem registra que o breaker não foi consultado é a linha `Evaluator this cycle` do bloco do fix-runner. Ler o journal e não achar a linha do breaker num ciclo é sinal esperado, não omissão.
 - **Estabilidade do vocabulário de status**: mantenha as strings de status em kebab-case estáveis byte a byte entre execuções — a comparação por `diff` entre dois journals (ou entre um journal e o chat report) depende disso.
 - **Listas de IDs de itens** nos sub-bullets de delta são ordenadas lexicograficamente dentro de cada grupo, para que diffs entre execuções destaquem apenas mudanças reais de pertencimento.
 - **Sem reordenação**: as linhas do **Cycle Log** são acrescentadas em ordem cronológica. Nunca reordene por status, contagem ou qualquer outra chave.

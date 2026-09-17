@@ -3,6 +3,14 @@ import json, os, re, sys
 
 MARKER = re.compile(r"\[NEEDS INPUT[^\]]*\]|\bTBD\b|<preencher>", re.IGNORECASE)
 
+# Artefatos gerados pelo loop de avaliação: são registros de auditoria, não
+# documentos a preencher. Um "TBD" citado na evidência de um eval-report ou no
+# motivo de término de um journal é conteúdo legítimo — avisar sobre ele só
+# produziria ruído a cada escrita. O contract.md NÃO entra aqui: um TBD nele é
+# uma lacuna de verdade.
+GENERATED_PREFIXES = ("eval-report-", "orchestration-")
+GENERATED_NAMES = {"wave-status.md"}
+
 
 def main() -> int:
     try:
@@ -21,6 +29,10 @@ def main() -> int:
     except ValueError:
         return 0
     if not rel.startswith("docs" + os.sep):
+        return 0
+
+    base = os.path.basename(abs_path)
+    if base.startswith(GENERATED_PREFIXES) or base in GENERATED_NAMES:
         return 0
 
     try:

@@ -1,11 +1,12 @@
 ## Visão Geral do Documento
 
-Cada feature produz DOIS arquivos em uma subpasta:
+Cada feature produz TRÊS arquivos em uma subpasta:
 
 | Arquivo | Propósito | Foco do Conteúdo |
 |------|---------|---------------|
 | `spec.md` | Especificação técnica | Requirements, architecture, API contracts, data models, error handling, estratégia de testing |
 | `plan.md` | Roadmap de implementação | Phases, steps numerados com descrições high-level |
+| `contract.md` | Contrato de comportamento | Itens GWT agnósticos de stack por superfície de verificação, com um Coverage Manifest que liga cada critério de aceite in-scope do PRD aos itens que o cobrem. Lido pelos agentes que implementam e que avaliam. Veja `contract-template.md` para o formato completo. |
 
 > **Os exemplos deste arquivo são ilustrativos, não prescritivos.** Eles usam SQL/PostgreSQL, Python/SQLAlchemy e pytest apenas para demonstrar o nível de detalhe esperado. Use sempre a stack, os tipos, os idiomas e o framework de testes descobertos no Codebase Pattern Discovery (Step 1.3). Num projeto Mongo, Rails, Go ou .NET, as tabelas mantêm as mesmas colunas conceituais e o conteúdo muda para o equivalente na stack.
 
@@ -313,7 +314,7 @@ Os valores de `Error code` devem bater com a tabela de Error Codes da Seção 6 
 | `test_create_success` | Criação válida | Retorna object, DB record existe |
 | `test_create_invalid` | Falha de validação | Gera (Raises) ValidationError |
 
-Os acceptance criteria por feature da Seção 9 do PRD viram acceptance tests aqui; os critérios de Cross-Feature Integration que referenciam esta feature viram integration tests.
+Esta seção descreve arquivos de teste, funções de teste, testes de frontend e cenários E2E como orientação de implementação para quem escreve o código. **Não inclua uma tabela de mapeamento de acceptance criteria do PRD, não adicione uma coluna "Critério de aceite coberto" a nenhuma sub-tabela e não anote critérios cross-feature como "fora do escopo" aqui.** A ligação AC ↔ verificação — tanto dos critérios da própria feature quanto dos critérios de `Cross-Feature Integration` atribuídos a ela — fica exclusivamente no Coverage Manifest do `contract.md`, que é a fonte única dessa ligação.
 
 ---
 

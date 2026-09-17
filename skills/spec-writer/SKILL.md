@@ -1,25 +1,28 @@
 ---
 name: spec-writer
-description: Gera spec de implementação técnica e plan para uma ou mais features com base no PRD, análise da codebase e esclarecimento iterativo. Suporta batch mode para gerar múltiplas features da mesma wave em parallel.
+description: Gera spec de implementação técnica, plan e contrato de comportamento para uma ou mais features com base no PRD, análise da codebase e esclarecimento iterativo. O contrato é um arquivo GWT (`contract.md`) agnóstico de stack e de consumidor que descreve a promessa testável da feature. Suporta batch mode para gerar múltiplas features da mesma wave em parallel.
 ---
 
 # Feature Specs Writer
 
 Gere especificações técnicas *implementation-ready* com base no *PRD* do projeto e nos *patterns* existentes da *codebase*. A *skill* possui dois modos:
 
-- **Single-feature mode (default):** opera em uma *feature* por vez, identificada pelo seu ID de *feature* no *PRD* (F01, F02...), com uma entrevista interativa (Passos 1–6 abaixo).
+- **Single-feature mode (default):** opera em uma *feature* por vez, identificada pelo seu ID de *feature* no *PRD* (F01, F02...), com uma entrevista interativa (Passos 1–7 abaixo).
 - **Batch mode:** opera em múltiplas *features* da mesma *wave* em *parallel*, aplicando *auto-accept* em todas as recomendações da entrevista. Ativado automaticamente quando o *input* contém múltiplos IDs, uma referência de *wave* ou uma mistura. Veja a seção **Batch Mode** perto do final deste arquivo.
 
-**Output:** DOIS arquivos são necessários:
+**Output:** TRÊS arquivos são necessários:
 1. `spec.md` - Technical specification (9 seções)
 2. `plan.md` - Implementation plan (*phases* e *steps*)
+3. `contract.md` - Behavior contract (superfícies de verificação + itens GWT + *coverage manifest*); a promessa testável da *feature*, escrita em linguagem agnóstica de consumidor para que qualquer ferramenta, agente ou pessoa consiga lê-la e exercitá-la
 
-**Output location:** `docs/<feature-id>-<kebab-name>/spec.md` e `docs/<feature-id>-<kebab-name>/plan.md`
+**Output location:** `docs/<feature-id>-<kebab-name>/spec.md`, `docs/<feature-id>-<kebab-name>/plan.md` e `docs/<feature-id>-<kebab-name>/contract.md`
 - O `<kebab-name>` é derivado do nome da *feature* na Seção 6 do *PRD* (letras minúsculas, espaços → hifens, caracteres especiais removidos). Exemplo: `F03. Video Upload` → `docs/F03-video-upload/`.
+
+O `contract.md` é **irmão** do `spec.md`, não filho: ambos são gerados na mesma execução a partir do mesmo *PRD*, mas o conteúdo do contrato se apoia nos critérios de aceite do *PRD* (Seção 11 e `Appendix A` → A.6), e não nas escolhas de implementação da *spec* — por isso refatorar a implementação nunca afeta o contrato.
 
 ---
 
-## Execution Steps (6 Passos)
+## Execution Steps (7 Passos)
 
 Nota: Estes são *steps* internos de execução do agente. O documento de *plan* de OUTPUT terá o número de *phases* definido pela tabela de escalonamento em `references/feature-template.md`, com base na complexidade da *feature*.
 
@@ -33,6 +36,8 @@ Aceite *free-form input* do usuário. O usuário pode referenciar a *feature* po
 - Identifique a *target feature* dentro do *PRD* por ID ou nome.
 - Se o *input* for ambíguo (ex: "upload" corresponde a múltiplas *features*), confirme com o usuário antes de prosseguir.
 - Se a *feature* referenciada não existir no *PRD*, liste as *features* disponíveis da tabela de dependências (`Appendix A: Implementation Planning` → `Dependency Graph`; em PRDs antigos, Seção 8) e peça ao usuário para esclarecer.
+
+**Flag opcional:** o *input* pode incluir `create-issue` (em qualquer posição). Quando presente, a *skill* cria uma *issue* de acompanhamento no GitHub para a *feature* no Step 6, sem perguntar. Quando ausente no *single-feature mode*, o Step 6 pergunta `y/n` ao usuário antes de criar; quando ausente no *Batch Mode*, o *plan* consolidado do *orchestrator* (B.4) pergunta uma única vez e a resposta vale para todas as *features* do *batch*. Veja o **Step 6** para o fluxo de criação da *issue* e o **Batch Mode** para a interação em *batch*.
 
 **PRD é obrigatório.** Se nenhum *PRD* for encontrado no projeto, pare e instrua o usuário a gerar um primeiro com a *skill* `prd-writer`. Não faça *fallback* para uma entrevista não estruturada.
 
@@ -67,6 +72,10 @@ Explore a *codebase* antes de escrever a *spec* (antes da entrevista no *single-
 - *Testing framework* e estilo (*unit* e *integration*)
 - *Error handling* (*exceptions*, *Result types*, códigos de erro, panic/recover, etc.)
 - *Folder structure* e *naming conventions*
+- **Convenção de seeding de estado persistente** (usada nos *Prerequisites* do `contract.md`). Como o projeto prepara dados de teste — *migrations* + arquivos de *seed* (`prisma/seed.ts`, `db/seeds/`), *factory functions* (`tests/factories/`), *setup hooks* (`globalSetup`, `beforeAll`), *helpers* de INSERT, ou outra coisa? Inspecione o código de *setup* de testes, as pastas de *seed/migration*, os arquivos de *factory* e os `contract.md` existentes em `docs/F*-*/` para achar o mecanismo dominante.
+- **Convenção de path de static inputs / fixtures** (usada nos *Prerequisites* do `contract.md`). Onde ficam os arquivos de dados de teste — `tests/fixtures/`, `__fixtures__/`, `fixtures/`, `cypress/fixtures/`, `playwright/fixtures/`? Por app ou na raiz? Leia primeiro os `contract.md` anteriores; os *paths* declarados neles são autoritativos quando existem.
+- **Convenção de configuração de teste** (usada nos *Prerequisites* do `contract.md`). `.env.test`, `config/test/`, blocos específicos do *framework* — o arquivo (ou esquema) que o *test runner* lê para *env vars* e *flags*.
+- **Convenção de mocks / dependências externas** (usada nos *Prerequisites* do `contract.md`). `tests/mocks/`, *handlers* MSW, *stubs* do mountebank etc. Descoberta quando os itens vão exigir externos simulados.
 
 **Layer 2 — Broad exploration (também obrigatório):** além do *baseline*, capture qualquer *pattern* adicional que você observar e que possa informar a implementação — decisões de arquitetura, idiomas da *codebase*, abstrações recorrentes, *logging/observability*, *config management*, convenções de *deploy*, internacionalização, acessibilidade, qualquer coisa. Não se restrinja à lista de *baseline*. Um relatório minucioso em um projeto médio tipicamente tem 8-15 *patterns*.
 
@@ -78,7 +87,7 @@ Se a *codebase* estiver vazia ou tiver apenas *scaffolding* (ex: apenas `package
 
 **1.5: Ler os dados da feature do PRD**
 
-Extraia a definição completa da *target feature* do *PRD* e carregue-a como contexto para a *spec* (usado pela entrevista no *single-feature mode*, e pela *Auto-Accept Policy* no *Batch Mode*):
+Extraia a definição completa da *target feature* do *PRD* e carregue-a como contexto para a *spec* e o contrato (usado pela entrevista no *single-feature mode*, e pela *Auto-Accept Policy* no *Batch Mode*):
 - Nome e ID da *feature*
 - Bloco `Consumes` (se presente — em `Appendix A` → `Feature Data Contracts`; em PRDs antigos, dentro da Seção 6)
 - Bloco `Provides` (mesma localização)
@@ -88,14 +97,15 @@ Extraia a definição completa da *target feature* do *PRD* e carregue-a como co
 - `Experience`
 - `Error Handling` (se presente)
 - Critérios de aceite (*acceptance criteria*) por *feature* da seção `Acceptance Criteria` (Seção 11; Seção 9 em PRDs antigos)
-- Critérios de *Cross-Feature Integration* da mesma seção que referenciam esta *feature* (seja como *consumer* ou *provider*)
+- Critérios de `Cross-Feature Integration` da mesma seção cujo cenário (`UC<NN>`) tem esta *feature* na coluna `Owner` da tabela `Use Scenario Coverage` (`Appendix A` → A.6)
+- A linha da *feature* no `Dependency Graph` (`Priority`, `Dependencies`) e sua *wave* em `Execution Waves` (`Appendix A` → A.2 e A.4; Seção 8 em PRDs antigos)
 - `Non-Functional Requirements` (Seção 7) cujos `RNF` afetam esta *feature* — desempenho percebido, disponibilidade, capacidade, segurança/privacidade, conformidade, acessibilidade, auditabilidade. **São a principal entrada de negócio para as decisões técnicas da spec.**
 - `Key Decisions and Trade-offs` (Seção 8) e `Open Questions` que restringem esta *feature*
 - `Dependencies` (Seção 9) que esta *feature* precisa consumir
 - `Risks and Mitigation` (Seção 10) cuja mitigação recai sobre esta *feature*
 - `Validation and Test Strategy` (Seção 12) — critérios de saída e forma de validação aplicáveis a esta *feature*
 
-Se o *PRD* for do formato antigo de 9 seções, estes itens simplesmente não existem: siga sem eles e registre a lacuna nas *assumptions* da spec.
+Se o *PRD* for do formato antigo de 9 seções, os itens das Seções 7–12 e a tabela A.6 simplesmente não existem: siga sem eles e registre a lacuna nas *assumptions* da spec. O mesmo vale para um *PRD* de 12 seções sem `A.6 Use Scenario Coverage`: nenhum critério de `Cross-Feature Integration` entra no contrato; registre a lacuna nas *assumptions*.
 
 **1.6: Apresentar entendimento ao usuário**
 
@@ -105,7 +115,7 @@ Com base na minha análise, entendo que você deseja implementar:
 **Feature:** F<ID>. <Name>
 **Technical Summary:** [1-2 frases derivadas das Capabilities + Experience do PRD]
 **Observed codebase patterns:** [resumo das descobertas da Layer 1 + Layer 2, ou "empty codebase — will bootstrap"]
-**PRD context loaded:** Consumes, Provides, Core Scope, Full Scope, Capabilities, Experience, Error Handling, acceptance criteria, NFRs, decisões de produto, dependências, riscos, estratégia de validação
+**PRD context loaded:** Consumes, Provides, Core Scope, Full Scope, Capabilities, Experience, Error Handling, acceptance criteria (incluindo os de Cross-Feature Integration atribuídos a esta feature), NFRs, decisões de produto, dependências, riscos, estratégia de validação
 
 Preciso esclarecer algumas decisões técnicas que o PRD e a codebase ainda não respondem.
 ```
@@ -124,13 +134,15 @@ Se uma pergunta puder ser respondida explorando a *codebase* ou lendo o *PRD*, e
 
 **Pergunta de Scope (faça primeiro, quando aplicável):** Se a *feature* tem ambos os blocos `Core Scope` e `Full Scope additions` no *PRD*, pergunte: "Should the spec cover Core Scope only, or Core + Full Scope additions?". Se apenas um dos blocos estiver presente, ou nenhum estiver presente, pule esta pergunta e assuma o *scope* completo da *feature*.
 
+**Esclarecimento de quality gates (faça em segundo, depois da pergunta de scope):** Detecte os *quality gates* do projeto a partir do contexto já ao seu alcance (o *harness* injetou o `CLAUDE.md` e a documentação do projeto; *manifests* como `package.json`, `Makefile`, `Taskfile`, `justfile`, `pyproject.toml` etc. podem ser lidos). Antes de montar a lista, verifique na *codebase* e nas *skills* disponíveis se existe um *script wrapper* que execute todos os *gates* de uma vez; quando existir, proponha o *wrapper* como *gate* no lugar dos *scripts* individuais que ele já executa. Apresente a lista detectada ao usuário: "I detected these quality gates from the project — confirm or edit the list before I write `## Quality gates` into the contract." Cada entrada detectada deve ter um nome, o comando literal a executar e uma descrição de uma linha do que significa passar. Aceite as edições do usuário (inclusões, remoções, reordenações, correções de comando, reescrita de descrições) antes de continuar. Se você não encontrar nenhum *gate*, pergunte: "I did not detect quality gates in this project. Skip the `## Quality gates` section in the contract?" — o usuário pode recusar (nesse caso, peça que ele dite os *gates*) ou aceitar (a seção é omitida por inteiro do contrato gerado).
+
 **Anti-redundancy rule:** NÃO pergunte sobre nada que já seja observável em:
 - Definição da *feature* no *PRD* (Consumes, Provides, Core Scope, Capabilities, Experience, Error Handling)
 - Critérios de aceite (*acceptance criteria*) do *PRD* para esta *feature*
 - Os *codebase patterns* descobertos no Step 1.3
-- Um `spec.md` ou `plan.md` gerado anteriormente para outra *feature* no mesmo projeto (quando existirem e forem relevantes)
+- Um `spec.md`, `plan.md` ou `contract.md` gerado anteriormente para outra *feature* no mesmo projeto (quando existirem e forem relevantes)
 
-Concentre a entrevista em decisões que o *PRD* e a *codebase* **não** respondem ainda: arquitetura interna, detalhes do *schema* de banco de dados (colunas, índices, *constraints*), assinaturas de *endpoints*, regras de validação não especificadas em Capabilities, nomenclatura de novos arquivos, escolha entre bibliotecas quando não houver *patterns* estabelecidos, *edge cases* não cobertos pelo *Error Handling*.
+Concentre a entrevista em decisões que o *PRD* e a *codebase* **não** respondem ainda: arquitetura interna, detalhes do *schema* de banco de dados (colunas, índices, *constraints*), assinaturas de *endpoints*, regras de validação não especificadas em Capabilities, nomenclatura de novos arquivos, escolha entre bibliotecas quando não houver *patterns* estabelecidos, *edge cases* não cobertos pelo *Error Handling*, superfícies do contrato quando o *PRD* for ambíguo (Step 4.3) e convenções de *fixtures*/*seeding*/configuração de teste quando o projeto não tiver nenhuma (Step 4.3).
 
 **Partial PRD specifications:** Quando o *PRD* menciona uma *capability* mas omite um detalhe específico (ex: "chunked upload" sem definir o tamanho do chunk), peça o detalhe ausente em vez de assumir um padrão.
 
@@ -142,17 +154,17 @@ Após receber as respostas:
 - Resuma as decisões técnicas tomadas
 - Liste as premissas (*assumptions*) derivadas do *PRD*, dos *codebase patterns* e das respostas da entrevista
 - Note explicitamente quais blocos do *PRD* informaram quais partes da *spec* (*traceability*)
-- **Classifique a complexidade da *feature*** (`trivial` | `simple` | `medium` | `complex`) usando os critérios da tabela "Níveis de Complexidade" em `references/feature-template.md`. Esse valor é o COMPLEXITY_LEVEL usado no Step 4 e reportado no Step 6.
+- **Classifique a complexidade da *feature*** (`trivial` | `simple` | `medium` | `complex`) usando os critérios da tabela "Níveis de Complexidade" em `references/feature-template.md`. Esse valor é o COMPLEXITY_LEVEL usado no Step 4 e reportado no Step 7.
 
 **Nota sobre Batch Mode:** Em *Batch Mode* não há respostas de entrevista. Trate cada padrão da *Auto-Accept Policy* que foi aplicado como se fosse uma resposta de entrevista — liste sob *assumptions*, nomeie a linha da política que o gerou e sinalize para que o usuário possa revisar e fazer *override* posteriormente. A *traceability* dos blocos do *PRD* funciona da mesma forma que no *single-feature mode*.
 
 ### Step 4: Gerar Documentos
 
-**Announce:** "Generating TWO documents: SPEC and PLAN..."
+**Announce:** "Generating THREE documents: SPEC, PLAN, and CONTRACT..."
 
 **Diretrizes de escala por complexidade:** a fonte da verdade são as tabelas "Escalonamento de profundidade por complexidade" e "Escalonamento do documento PLAN" em `references/feature-template.md`. Consulte-as antes de gerar; não duplique esses números aqui.
 
-**Use o template `references/feature-template.md` para AMBOS os documentos** — ele define as 9 seções da *spec*, o formato do *plan* e os níveis de complexidade.
+**Use o template `references/feature-template.md` para a SPEC e o PLAN** — ele define as 9 seções da *spec*, o formato do *plan* e os níveis de complexidade. **Use o template `references/contract-template.md` para o CONTRACT** — ele é a fonte única do formato do `contract.md`.
 
 Nota: A profundidade do documento SPEC (*schemas*, índices, *migrations*) escala com a complexidade. Os *steps* do documento PLAN são sempre de alto nível, independentemente da complexidade.
 
@@ -163,6 +175,7 @@ Nota: A profundidade do documento SPEC (*schemas*, índices, *migrations*) escal
   - medium/complex: Todas as 9 seções requeridas
 - Escale a profundidade dentro das seções com base na complexidade
 - Inclua exemplos JSON, *SQL migrations*, especificações de testes
+- **Conteúdo da Spec §9 *Testing Strategy*:** descreva arquivos de teste, funções de teste, testes de *frontend* e cenários E2E como orientação de implementação para quem escreve o código. **Não inclua uma tabela de mapeamento de acceptance criteria do PRD, não adicione uma coluna "Critério de aceite coberto" a nenhuma sub-tabela e não anote critérios cross-feature como "OUT OF SCOPE" dentro do `spec.md`.** O mapeamento AC ↔ verificação é gerado separadamente no *Coverage Manifest* do `contract.md` no Step 4.3, que é a fonte única dessa ligação. O filtro de critérios fora do escopo é codificado em silêncio por quais ACs entram no *Coverage Manifest* — nunca por uma anotação na *spec*.
 - **Se FEATURE_CROSS_CUTTING existir:** Inclua *cross-cutting concerns* integradas na Spec §1 → *Scope* → "Included":
   ```
   **Included:**
@@ -186,8 +199,8 @@ Nota: A profundidade do documento SPEC (*schemas*, índices, *migrations*) escal
 | PRD Seção 9: `Dependencies` | Spec §6 *API Contracts* / integrações externas |
 | PRD Seção 10: `Risks and Mitigation` | Spec §4 *Assumptions/Constraints* + §8 *Error Handling* quando a mitigação é comportamento do sistema |
 | PRD Seção 12: `Validation and Test Strategy` | Spec §9 *Testing Strategy* → critérios de saída e cenários de validação |
-| PRD `Acceptance Criteria`: critérios por feature | Spec §9 *Testing Strategy* → *acceptance tests* |
-| PRD `Acceptance Criteria`: critérios de Cross-Feature Integration (referenciando esta feature) | Spec §9 *Testing Strategy* → *integration tests* |
+
+**Nota sobre a Seção 11 do PRD (`Acceptance Criteria`):** os critérios por *feature* e os critérios de `Cross-Feature Integration` atribuídos a esta *feature* em A.6 NÃO são mapeados dentro do `spec.md`. A fonte única do mapeamento AC ↔ verificação é o *Coverage Manifest* do `contract.md` (texto do AC copiado do PRD → IDs dos itens que o cobrem). A Spec §9 continua listando arquivos de teste, testes de *frontend* e cenários E2E como orientação de implementação, mas NÃO carrega tabela "AC ↔ teste" nem coluna que ligue cenários a ACs. Os critérios de `Cross-Feature Integration` vivem apenas no contrato da *feature* `Owner` do cenário, nunca na *spec*. Os critérios do bloco `Non-Functional Acceptance` nunca entram no contrato: os `RNF` são tratados pelas linhas "Seção 7" e "Seção 12" da tabela acima. Essa separação permite que quem implementa foque em estrutura/arquitetura (*spec*) e que quem avalia o contrato seja dono da verificação de comportamento (*contract*).
 
 **4.2: Generate PLAN**:
 - Seção de *Prerequisites*
@@ -196,7 +209,39 @@ Nota: A profundidade do documento SPEC (*schemas*, índices, *migrations*) escal
 
 Siga o formato de *Phases e Steps* e as *Guidelines de Conteúdo* de `references/feature-template.md`.
 
-**Announce:** "Both documents ready. Proceeding to save..."
+**4.3: Generate CONTRACT**:
+- Leia de `references/contract-template.md` o formato completo, a regra de idioma, o catálogo de superfícies, o *schema* dos itens, os *guard-rails*, as regras de *Prerequisites*, de *Quality gates* e do *coverage manifest*. Esse template é a fonte única do formato do `contract.md` — não improvise estrutura.
+- **Idioma:** conteúdo em pt-BR; âncoras estruturais em inglês, literalmente como listadas na "Regra de Idioma" do template (títulos de seção, labels de *Prerequisites*, `Verification mode:`, `Common given:`, `Used by:`, campos `id`/`given`/`when`/`then`/`notes`, sub-headers de *capability* e IDs dos itens).
+- **Monte o conjunto de critérios candidatos.** São duas origens: (a) os critérios do bloco `### F<ID>` da Seção 11 do *PRD* (Seção 9 em PRDs antigos); (b) os critérios `(UC<NN>)` de `Cross-Feature Integration` cujo cenário tem esta *feature* como `Owner` em `Appendix A` → A.6. Critérios `(RNF<NN>)` do bloco `Non-Functional Acceptance` nunca são candidatos.
+- **Filtre os critérios da origem (a) contra o bloco `Included` da `spec.md` da *feature* antes de gerar os itens.** ACs cujo comportamento verificado pertence inteiramente a outra *feature* (seja a jusante desta, irmã na mesma *wave*, ou em qualquer outro lugar do *PRD*) são descartados em silêncio — não entram no *manifest*, não geram itens e não produzem avisos no console durante a geração. Os critérios da origem (b) não passam por este filtro: a atribuição em A.6 já garante que o cenário é exercitável com esta *feature* + seu fecho de dependências. O conjunto restante são os "ACs in-scope". Princípio: todo item precisa ser testável com esta *feature* + o **fecho de dependências** dela no `Dependency Graph` (`Appendix A` → A.2; Seção 8 em PRDs antigos) implementados; itens que exigem *features* FORA do fecho para verificar seu comportamento não devem ser gerados. (Quando o comportamento do AC é desta *feature*, mas o *setup* natural do teste precisaria de infraestrutura de fora, não descarte o AC — mantenha-o e aplique o *Preparation Pattern* da regra de fecho de dependências abaixo.)
+- Detecte quais superfícies se aplicam (`Service`, `HTTP API`, `CLI`, `UI`, `Worker`, `Event`, `E2E`) inspecionando `Capabilities`, `Experience` e `Provides` do *PRD* em busca de sinais de superfície. No *single-feature mode*, pergunte durante a entrevista quando for ambíguo. Em *Batch Mode*, o default é "todas as superfícies com ao menos um sinal no PRD", documentado em Assumptions.
+- Aplique a **Service Admission Rule** com rigor: emita `## Service` apenas quando houver um consumidor real fora desta *feature*. Nunca a emita para *helpers* internos, VOs, *entities* ou itens por classe.
+- Gere os itens com os quatro *guard-rails* no `then` (coesão de superfície, atomicidade da ação, *soft cap* de ~5 bullets, bullet atômico). Use `Common given:` por *capability* para evitar repetição.
+- Os IDs dos itens seguem `<SURFACE>-<CAPABILITY>-<NN>` (sem prefixo de ID da *feature*). Códigos de superfície: `SVC`, `API`, `CLI`, `UI`, `WRK`, `EVT`, `E2E`.
+- Monte o **Coverage Manifest** mapeando cada AC in-scope para os IDs dos itens que o cobrem. A primeira coluna carrega o **texto do AC copiado do PRD como está** — tudo o que vem depois de `- [ ] ` na linha do critério, incluindo o prefixo de ID (`(RF01.1) ...`, `(UC01) ...`) —, não um ID sintético.
+- Monte a seção **Prerequisites** como a primeira seção `##` abaixo do título (a linha de regeneração em itálico não é uma seção), acima do *Coverage Manifest*. Derive condições prospectivas sem inspecionar o *filesystem* (a implementação ainda não existe); use as convenções do projeto capturadas no Step 1.3 para ancorar *paths* e mecanismos.
+- Monte a seção **Quality gates** logo depois de `## Prerequisites` e antes de `## Coverage Manifest`. Renderize cada *gate* confirmado no esclarecimento do Step 2 como um bullet no formato `- **<name>** — \`<command>\` — <descrição de uma linha do que significa passar>`. Abra a seção com um parágrafo curto que diga "Cada gate precisa passar para a feature ser considerada pronta" — descreva apenas comportamento, nunca nomeie um executor (nada de "o evaluator roda", nada de vocabulário de *fail-fast*, nada de prescrição de ordem de execução). Se o usuário recusou a seção no esclarecimento do Step 2 (nenhum *gate* detectado e nenhuma lista ditada), omita a seção por inteiro — não renderize um *placeholder* vazio.
+- Use as **cinco subseções fixas** nesta ordem, omitindo as que não tiverem entradas (sem *placeholder* "nenhum."): `Runtime services`, `Persistent state`, `Static inputs`, `Configuration`, `External dependencies`.
+- **`Persistent state` e `Static inputs` NUNCA se misturam.** *Persistent state* cobre entidades/contas/registros/mensagens/tokens que precisam existir *dentro* do *store*/fila do sistema (O QUE, de forma declarativa — a convenção de *seeding* do projeto dita o COMO). *Static inputs* cobre arquivos que os itens referenciam por *path* (a convenção de *path* de *fixtures* do projeto dita ONDE no disco). Uma conta pertence a *Persistent state*, nunca a *Static inputs*. Um arquivo de vídeo pertence a *Static inputs*, nunca a *Persistent state*.
+- **Reutilize as convenções descobertas no projeto; nunca invente *paths* ou mecanismos.** Os *paths* de *Static inputs* vêm da convenção de *path* de *fixtures* descoberta no Step 1.3 e declarada pelos contratos anteriores em `docs/F*-*/`. As entradas de *Persistent state* são escritas de forma declarativa; o implementador as cumpre pela convenção de *seeding* descoberta no Step 1.3. As entradas de *Configuration* seguem a convenção de configuração de teste do projeto. As *External dependencies* seguem a convenção de *mocks* do projeto.
+- **Regra de fecho de dependências para Prerequisites (independência vs. preparação).** Toda entrada de *Prerequisites* PRECISA ser satisfazível pelas entregas desta própria *feature* OU por *features* dentro do **fecho de dependências** desta *feature* no `Dependency Graph` (esta *feature* + suas dependências declaradas + as dependências transitivas delas). Nunca declare um *prereq* que exija que uma *feature* **fora** desse fecho esteja implementada — mesmo quando a *feature* de fora está na mesma *wave* ou parece "logicamente relacionada". A tabela `Dependency Graph` é a única fonte autoritativa do que esta *feature* pode usar. (Não confunda com a Seção 9 `Dependencies` do *PRD*, que trata de dependências de negócio externas.)
+
+  Quando um AC in-scope descreve o comportamento da superfície desta própria *feature*, mas o *setup* natural do teste normalmente precisaria de infraestrutura de uma *feature* fora do fecho (caso típico: uma *feature* irmã que constrói *auth*, sessões, pagamentos, armazenamento de arquivos etc.), aplique o **Preparation Pattern**:
+
+  1. Confirme que o AC descreve o comportamento da superfície DESTA *feature*. Se ele na verdade descreve uma integração em nível de sistema com outra *feature*, descarte-o como cross-feature (o filtro do Step 4.3 já trata disso).
+  2. Trate a infraestrutura ausente como um *stub*/*override*/*flag* que ESTA *feature* entrega como parte do próprio escopo — não como um estado real que a *feature* irmã produz.
+  3. Redija o *prereq* em torno do mecanismo interno da *feature*, nunca em torno do estado real da *feature* irmã.
+
+  Exemplo concreto. F01 (Landing Page, deps: nenhuma) tem o AC "usuários autenticados que visitam `/` são redirecionados para `/app`". A *auth* é entregue por F02 (irmã, também sem deps). F02 está **fora** do fecho de dependências de F01. ERRADO: declarar `landing-returning-user — existe como um usuário autenticado real com sessão válida`, o que exige o fluxo de *auth* de F02. CERTO: declarar uma entrada de `Configuration` como `a verificação de sessão usada por /` `pode ser levada a um estado autenticado por um mecanismo de teste com escopo de F01 (flag só de teste, override do módulo de sessão, ou cookie de teste honrado pela própria F01); esse mecanismo faz parte das entregas de F01.` F01 implementa tanto o comportamento de produção QUANTO o *override* de teste; o contrato é exercitável só com F01.
+
+  Justificativa: o contrato de uma *feature* precisa ser exercitável quando apenas esta *feature* + suas dependências declaradas estão implementadas. Se não for, ou (a) o contrato saiu do escopo declarado e o *prereq* está errado, ou (b) o AC é genuinamente cross-feature e deveria ter sido filtrado no Step 4.3.
+- **Greenfield (nenhuma convenção encontrada):** no *single-feature mode*, leve a pergunta para a entrevista ("Where should fixtures live? How is test data seeded? Which env file does the test runner read?"). Em *Batch Mode*, aplique o default mais comum da *stack* detectada (ex.: `tests/fixtures/` para projetos Node/Vitest) e documente cada convenção escolhida em Assumptions da *spec*. As *features* seguintes do mesmo projeto reutilizam a escolha.
+- Cite os itens consumidores na cláusula `Used by:` de cada entrada de *Persistent state* e *Static inputs*. Os itens referenciam essas entradas por *handle* (nome da conta, *path* do arquivo) no `given` e no `when`.
+- Escreva os *Prerequisites* em linguagem agnóstica de consumidor — nunca nomeie "o agente implementador" ou "o evaluator"; apenas declare as condições.
+- ACs subjetivos (identidade visual, julgamento qualitativo) são cobertos por um item *placeholder* com `notes: subjective; manual review only`.
+- Critérios de `Cross-Feature Integration` entram apenas no *manifest* da *feature* `Owner` do cenário em A.6; nunca no contrato das demais *features* envolvidas.
+
+**Announce:** "Three documents drafted. Validating coverage..." (o *save* depende de o Step 5 passar, incluindo o *hard coverage gate* do contrato).
 
 ### Step 5: Validate e Save
 
@@ -214,24 +259,156 @@ Documento SPEC:
 - [ ] Blocos do *PRD* mapeados corretamente conforme a tabela PRD → SPEC
 - [ ] *Consumes/Provides* do *PRD* estão refletidos no *Scope* ou *API Contracts*
 - [ ] Todo `RNF` Must have do *PRD* que afeta esta *feature* tem uma decisão técnica correspondente na *spec* que o atende
-- [ ] Critérios de *Cross-Feature Integration* do *PRD* que referenciam esta *feature* aparecem como *integration tests*
+- [ ] **Nenhum mapeamento AC ↔ teste no `spec.md`.** A Spec §9 lista arquivos de teste / testes de *frontend* / cenários E2E apenas como orientação de implementação; sem tabela de mapeamento de acceptance criteria, sem coluna "Critério de aceite coberto" em nenhuma sub-tabela, sem rastreabilidade por AC dentro do `spec.md`. O mapeamento AC ↔ verificação vive exclusivamente no *Coverage Manifest* do `contract.md`.
+- [ ] Nenhuma nota de rastreabilidade na *spec* aponta texto de AC para dentro do `spec.md` (o *Coverage Manifest* do `contract.md` é canônico para essa ligação)
 
 Documento PLAN:
 - [ ] *Steps* numerados ao longo das *phases*
 - [ ] Formato: **N. Component** - Parágrafo de alto nível (1-3 frases)
 - [ ] *Steps* descrevem O QUE, não COMO (a *spec* possui os detalhes)
 
-**Salve ambos os arquivos em `docs/<feature-id>-<kebab-name>/spec.md` e `docs/<feature-id>-<kebab-name>/plan.md`.** Crie a pasta se não existir. Verifique ambos os arquivos com a *tool* de Read.
+Documento CONTRACT:
+- [ ] O título é seguido por uma linha de regeneração em itálico (`*Gerado pelo spec-writer. Edições manuais são sobrescritas na regeneração.*`), não por um comentário HTML
+- [ ] As âncoras estruturais estão em inglês, literalmente como na "Regra de Idioma" do template; o restante do conteúdo está em pt-BR
+- [ ] A primeira seção `##` abaixo do título é `## Prerequisites` (a linha de regeneração em itálico não é uma seção); ela fica acima do *Coverage Manifest* e usa as **cinco subseções fixas** na ordem (`Runtime services`, `Persistent state`, `Static inputs`, `Configuration`, `External dependencies`), omitindo as que não têm entradas
+- [ ] Os *Prerequisites* são escritos como condições prospectivas, nunca como retratos do estado atual. A redação sustenta duas leituras sem privilegiar nenhuma: (a) para quem constrói a *feature*, os *prerequisites* são entregas a produzir junto com o código; (b) para quem exercita o contrato depois, são pré-condições a verificar antes de executar os itens
+- [ ] O conteúdo gerado é agnóstico de consumidor: o contrato nunca nomeia "o agente implementador", "o evaluator", "o agente avaliador" ou qualquer ferramenta específica — ele descreve comportamento, não quem o executa
+- [ ] `Persistent state` e `Static inputs` não estão misturados — contas/registros/sessões/tokens nunca aparecem em `Static inputs`; arquivos nunca aparecem em `Persistent state`
+- [ ] As entradas de `Persistent state` são declarativas ("alice existe com X atributos"), nunca operacionais ("rode este seed" / "execute este SQL")
+- [ ] Os *paths* de `Static inputs` seguem a convenção de *path* de *fixtures* descoberta no projeto (batendo com as declarações dos `docs/F*-*/contract.md` anteriores e com as pastas de *fixtures* existentes); nenhum *path* ad hoc inventado
+- [ ] Todo *handle* referenciado no `given` ou `when` de qualquer item (nomes de conta, *paths* de arquivo) tem declaração correspondente na subseção de *Prerequisites* adequada
+- [ ] Nenhuma declaração em `Persistent state` ou `Static inputs` fica sem ao menos um item consumidor na cláusula `Used by:` (sem declarações órfãs)
+- [ ] **Checagem de fecho de dependências.** Toda entrada de *Prerequisites* (nas cinco subseções) é satisfazível pelas entregas desta *feature* ou por *features* dentro do fecho de dependências dela no `Dependency Graph`. Nenhuma entrada referencia estado real, conta, sessão, *capability* ou conceito de *runtime* que só uma *feature* FORA do fecho produziria. Quando o *setup* natural de um AC in-scope precisaria de infraestrutura de fora, o *prereq* descreve um *stub*/*override*/*flag* interno da *feature* (o *Preparation Pattern*), não o estado real da *feature* de fora.
+- [ ] Se `## Quality gates` estiver presente, fica entre `## Prerequisites` e `## Coverage Manifest`; cada entrada segue `- **<name>** — \`<command>\` — <descrição>`; o preâmbulo descreve apenas comportamento e nunca nomeia um executor (nada de "o evaluator", nada de vocabulário de *fail-fast*, nada de prescrição de ordem de execução); quando nenhum *gate* foi detectado e o usuário recusou ditar algum, a seção é omitida por inteiro (sem *placeholder* vazio)
+- [ ] `## Coverage Manifest` é a próxima seção `##` depois de `## Prerequisites` (quando não há *Quality gates*) ou de `## Quality gates` (quando presente) e mapeia o texto copiado do PRD de cada AC in-scope → IDs dos itens que o cobrem
+- [ ] A primeira coluna do *manifest* reproduz o critério do PRD como está, incluindo o prefixo de ID (`(RF..)` ou `(UC..)`)
+- [ ] Nenhuma linha do *manifest* referencia um AC da própria *feature* cuja verificação cai fora do escopo `Included` do `spec.md` (critérios cross-feature foram descartados em silêncio na geração)
+- [ ] Nenhuma linha do *manifest* traz critério `(RNF..)` de `Non-Functional Acceptance`
+- [ ] Todo critério `(UC..)` no *manifest* pertence a um cenário cujo `Owner` em A.6 é esta *feature*, e todo critério de cenário com `Owner` = esta *feature* está no *manifest*
+- [ ] Toda seção de superfície de primeiro nível corresponde a uma superfície do catálogo (`Service`/`HTTP API`/`CLI`/`UI`/`Worker`/`Event`/`E2E` ou uma extensão documentada)
+- [ ] Toda seção de superfície tem uma linha `Verification mode:` logo abaixo do título
+- [ ] `## Service` (se presente) nomeia um consumidor real fora desta *feature*; nenhum item por classe/VO/*helper* em lugar nenhum
+- [ ] Os sub-headers usam vocabulário de *capability*, não de entidade de superfície (nada de `### POST /auth/register`, nada de `### /login page`)
+- [ ] Todo item tem `id`, `given`, `when`, `then` (nesta ordem); `notes` apenas quando necessário
+- [ ] Os IDs dos itens são únicos no arquivo e seguem `<SURFACE>-<CAPABILITY>-<NN>` (sem prefixo de ID da *feature*)
+- [ ] Nenhum `then` passa de ~5 bullets sem justificativa clara; nenhum passa de 10
+- [ ] Nenhum bullet contrabandeia várias observações com conjunções "e"
+- [ ] Todo item é testável com esta *feature* + o fecho de dependências dela no `Dependency Graph` implementados. Nenhuma verificação de comportamento depende de uma *feature* fora desse fecho (consumidores a jusante E irmãs incluídas). O *setup* de teste que naturalmente precisaria de infraestrutura de fora é atendido pelo *Preparation Pattern*, não referenciando a *feature* de fora diretamente.
+- [ ] Nenhum *anti-pattern* de `references/contract-template.md` § "Anti-patterns a recusar" está presente (nenhum `then` que repete o `when`, nenhum item por classe, nenhum *setup* operacional vazando para o `given`, nenhum bullet "o teste passa" / "a função é chamada", nenhuma linha do *manifest* com "Covered by" vazio, nenhuma referência a *fixture* sem declaração em *Prerequisites*)
 
-### Step 6: Output Result
+**Hard coverage gate:** antes de salvar, verifique que todo AC **in-scope** desta *feature* (todo critério da própria *feature* que sobreviveu ao filtro do Step 4.3, mais todo critério de `Cross-Feature Integration` atribuído a ela em A.6) aparece no *Coverage Manifest* com ao menos um ID de item cobrindo. Se qualquer AC in-scope tiver zero cobertura, aborte e NÃO salve nada (nem *spec*, nem *plan*, nem *contract*). Imprima:
 
-Informe o *path* dos arquivos de *spec* e *plan*, o nível de complexidade da *feature*, e quantas *phases* há no *plan*.
+```
+ERROR: contract coverage gap for F<ID>. The following in-scope PRD acceptance
+criteria have no covering item:
+  - "<texto do AC>"
+  - "<texto do AC>"
+Either generate covering items, or revise the PRD/spec if the AC is no longer
+applicable to this feature.
+```
+
+Abortar os três arquivos (e não só o contrato) mantém a pasta da *feature* consistente.
+
+**Salve os três arquivos em `docs/<feature-id>-<kebab-name>/spec.md`, `plan.md` e `contract.md`.** Crie a pasta se não existir. Verifique os três arquivos com a *tool* de Read.
+
+### Step 6: Issue Creation (opcional)
+
+Depois que o Step 5 salvar os três arquivos com sucesso, decida se abre uma *issue* de acompanhamento no GitHub para esta *feature*.
+
+**6.1 — Decidir se cria.**
+
+- Se a *flag* `create-issue` estava no *input* → siga para 6.2 sem perguntar.
+- Se ausente (*single-feature mode*) → pergunte ao usuário: `"Create a GitHub issue for F<ID> <Feature Name>? (y/n)"`. Siga para 6.2 apenas com `y` / `yes` / `sim`. Qualquer outra resposta (ou `n`) pula a criação por inteiro; vá para o Step 7.
+- Se ausente (*Batch Mode*) → o *orchestrator* já perguntou uma vez em B.4 e propagou a decisão. O *sub-agent* trata a ausência aqui como "não criar", porque o *orchestrator* só encaminha `create-issue` quando o usuário optou por criar. Vá para o Step 7.
+
+**6.2 — Detectar issue aberta existente.**
+
+Procure no GitHub uma *issue* aberta cujo título comece com `[F<ID>]`:
+
+```
+gh issue list --search "[F<ID>] in:title" --state open --json number,url --limit 5
+```
+
+- **Uma correspondência aberta** → pule a criação. Guarde a URL existente para a saída do Step 7.
+- **Várias correspondências abertas** → use a primeira; registre em `Soft-fails`: `"multiple open issues with [F<ID>] prefix; reporting only #<first-number>"`.
+- **Só correspondências fechadas OU nenhuma** → siga para 6.3 (criar nova). Uma *issue* fechada significa que o ciclo anterior desta *feature* já foi entregue; a nova *spec* merece uma *issue* nova.
+
+**6.3 — Montar título e corpo.**
+
+Origens dos *placeholders* (sem reler o que já foi carregado):
+
+- **`<Nome da Feature>`** — da entrada da Seção 6 do *PRD* já carregada no Step 1.5; caso contrário, derive do nome da pasta da *feature* (`F<ID>-<kebab>` → remova o prefixo, troque hifens por espaços, capitalize).
+- **`<texto do AC>`** — os critérios de aceite da própria *feature* na Seção 11 do *PRD* (já carregados no Step 1.5), cada um copiado como está, incluindo o prefixo de ID.
+- **`<dependências>`** — da linha da *feature* no `Dependency Graph` (`Appendix A` → A.2, já carregada no Step 1.5).
+- **`<wave>`** — de `Execution Waves` (`Appendix A` → A.4); **`<prioridade>`** — da coluna `Priority` do `Dependency Graph` (A.2).
+- **`<resumo de 2–3 frases>`** — as primeiras 1–2 frases de `Capabilities` mais, se necessário, uma frase de `Experience`, da Seção 6 do *PRD*.
+
+Título:
+```
+[F<ID>] <Nome da Feature>
+```
+
+Template do corpo:
+
+````markdown
+## Resumo
+
+Implementa **F<ID>: <Nome da Feature>**.
+
+<resumo de 2–3 frases derivado de Capabilities + Experience do PRD>
+
+## Critérios de Aceite
+
+- [ ] <texto do AC copiado da Seção 11 do PRD>
+- [ ] <texto do AC copiado da Seção 11 do PRD>
+...
+
+## Dependências
+
+- F<dep-ID>: <nome da dependência>
+- ...
+
+(ou "Nenhuma" quando não há dependências)
+
+## Wave e Prioridade
+
+- Wave: <N>
+- Prioridade: <1|2|3>
+
+## Documentos
+
+- Spec: `docs/F<ID>-<name>/spec.md`
+- Plan: `docs/F<ID>-<name>/plan.md`
+- Contract: `docs/F<ID>-<name>/contract.md`
+- Seção do PRD: `<path do PRD>` § F<ID>
+
+---
+
+🤖 Gerada automaticamente. Cada critério de aceite acima será verificado ponta a ponta contra o contrato.
+````
+
+**6.4 — Criar a issue.**
+
+```
+gh issue create --title "<title>" --body "$(cat <<'EOF'
+<body content>
+EOF
+)"
+```
+
+Guarde a URL da *issue* retornada. NÃO adicione *labels*, *assignees*, *milestones* nem *projects* — nenhum é definido por padrão. Times que os queiram configuram os *defaults* do repositório no GitHub ou os aplicam manualmente depois da criação.
+
+**6.5 — Tratamento de falha.** Se o `gh` sair com código diferente de zero (*auth*, rede, `gh` não instalado, repositório não conectado), NÃO aborte a execução. Os três arquivos já estão salvos — essa é a entrega principal da *skill*. Registre em `Soft-fails`: `"issue not created: <gh stderr excerpt>; run manually: gh issue create --title \"<title>\" --body-file <path-to-body>.md"`. Siga para o Step 7.
+
+### Step 7: Output Result
+
+Informe o *path* dos arquivos de *spec*, *plan* e *contract*, o nível de complexidade da *feature*, quantas *phases* há no *plan* e a contagem de itens do contrato por superfície (ex.: "Contract: 14 items across HTTP API (8), UI (4), E2E (2); 9/9 PRD ACs covered"). Informe também a URL da *issue* (criada ou existente) quando o Step 6 rodou, e os `Soft-fails`, quando houver.
 
 ---
 
 ## Batch Mode
 
-Gere *specs* para múltiplas *features* da mesma *wave* em *parallel*, aplicando *auto-accept* em todas as recomendações de entrevista. Este modo é um mero *wrapper* de orquestração sobre os Steps 1–6: os *sub-agents* executam o fluxo de *single-feature* completo; o *orchestrator* apenas resolve o *input*, valida, faz o *dispatch* e relata.
+Gere *specs* para múltiplas *features* da mesma *wave* em *parallel*, aplicando *auto-accept* em todas as recomendações de entrevista. Este modo é um mero *wrapper* de orquestração sobre os Steps 1–7: os *sub-agents* executam o fluxo de *single-feature* completo; o *orchestrator* apenas resolve o *input*, valida, faz o *dispatch* e relata.
 
 ### Ativação
 
@@ -241,7 +418,7 @@ A *skill* entra no modo *Batch Mode* automaticamente quando o *input* correspond
 - Mistura dentro da mesma *wave*: `wave 3 F04`
 - Múltiplos nomes de *features*, ou nomes misturados com IDs, contanto que todos resolvam para a mesma *wave*
 
-Um *input* de *single-feature* (ex: `F03`, `Video Upload`) continua a usar o fluxo interativo (Steps 1–6).
+Um *input* de *single-feature* (ex: `F03`, `Video Upload`) continua a usar o fluxo interativo (Steps 1–7).
 
 ### Regra de Same-wave
 
@@ -254,7 +431,7 @@ Todas as *features* em um único *batch* devem pertencer à mesma *wave* (confor
 
 ### Fluxo de Orchestration
 
-O Step 1 (Resolver Input e Pre-Analysis) é adaptado para o contexto de *batch* conforme descrito abaixo. Os Steps 2–6 NÃO são executados pelo *orchestrator* — eles rodam dentro de cada *sub-agent*, um por *feature*, de acordo com a *Auto-Accept Policy*.
+O Step 1 (Resolver Input e Pre-Analysis) é adaptado para o contexto de *batch* conforme descrito abaixo. Os Steps 2–7 NÃO são executados pelo *orchestrator* — eles rodam dentro de cada *sub-agent*, um por *feature*, de acordo com a *Auto-Accept Policy*.
 
 **B.1: Resolver o batch**
 
@@ -264,7 +441,7 @@ O Step 1 (Resolver Input e Pre-Analysis) é adaptado para o contexto de *batch* 
 - Se o nome de alguma *feature* no *input* for ambíguo (corresponde a múltiplas *features* no *PRD*, ex: "upload" corresponde a F03 e F11), liste as candidatas para o usuário e peça a desambiguação ANTES de prosseguir para o restante de B.1. Esta é a segunda pausa interativa possível antes do plano consolidado.
 - Se qualquer ID ou nome de *feature* não existir no *PRD*, rejeite com a lista das *features* disponíveis.
 - Valide a regra de *same-wave*.
-- Para cada *target*, verifique se `docs/<feature-id>-<kebab-name>/spec.md` já existe. Marque essas *features* como "already has spec".
+- Para cada *target*, verifique se `docs/<feature-id>-<kebab-name>/spec.md`, `plan.md` ou `contract.md` já existem. Marque essas *features* como "already has spec/plan/contract" (tratados como uma unidade — os três arquivos compartilham o ciclo de vida).
 
 **B.2: Classificação de Greenfield e Foundation**
 
@@ -303,15 +480,22 @@ OK to proceed? (yes/no)
 
 Prossiga apenas com um "yes" explícito. Diante de um "no" ou qualquer resposta negativa/ambígua, aborte o processo de forma limpa, sem fazer *dispatch* dos *sub-agents* e sem criar nenhum arquivo. Se o usuário quiser alterar o *plan*, ele re-invoca a *skill* com o *input* atualizado. As *features* marcadas como "already has spec" são ignoradas por padrão; o usuário pode solicitar a regeneração na resposta de confirmação (ex: "yes, regenerate F07").
 
+**Pergunta de criação de issue (apenas quando a *flag* `create-issue` NÃO estava no *input* do *batch*):** depois que o usuário responder "yes" ao *plan* consolidado acima, faça uma pergunta adicional: `"Also create a GitHub issue per feature in this batch? (y/n)"`. A resposta vale para **todas** as *features* do *batch* — os *sub-agents* não perguntam individualmente. Registre a resposta:
+- `y` / `yes` / `sim` → defina a *flag* `create-issue` e encaminhe-a no *prompt* de todos os *sub-agents* em B.5.
+- qualquer outra coisa → não encaminhe; os *sub-agents* pulam a criação de *issue* do Step 6.
+
+Se `create-issue` já estava no *input* do *batch*, pule esta pergunta e encaminhe a *flag* a todos os *sub-agents* incondicionalmente.
+
 **B.5: Dispatch dos sub-agents**
 
 - **Fase sequencial (somente Foundations, quando greenfield ou Partial Foundation):** faça o *dispatch* dos *sub-agents* de *Foundation* um por vez, aguardando que cada um complete antes de iniciar o próximo, na ordem em que aparecem em `Foundation Features` (`Appendix A` do PRD).
 - **Fase paralela:** faça o *dispatch* de todos os *sub-agents* restantes em uma única mensagem com múltiplas chamadas da *tool* Agent, sem limite de concorrência.
 - O *prompt* de cada *sub-agent* inclui:
   - O ID da *target feature* e o *path* do *PRD*
-  - Instrução para executar os Steps 1–6 deste SKILL.md para aquela *feature*
+  - Instrução para executar os Steps 1–7 deste SKILL.md para aquela *feature*
   - A *Auto-Accept Policy* abaixo, substituindo a entrevista interativa (Step 2)
-  - Lembrete para salvar `spec.md` e `plan.md` conforme o Step 5
+  - Lembrete para salvar `spec.md`, `plan.md` e `contract.md` conforme o Step 5, e para aplicar o *hard coverage gate* do contrato (abortar os três em caso de lacuna)
+  - A *flag* `create-issue`, quando o usuário optou por ela em B.4
 
 Cada *sub-agent* realiza seu próprio *Pattern Discovery* (Step 1.3) de forma independente — sem compartilhamento entre *sub-agents*.
 
@@ -346,8 +530,14 @@ Cada *sub-agent* pula a entrevista interativa (Step 2) e aplica esses padrões p
 | Especificações parciais do PRD (Step 2 — capability mencionada, mas detalhe técnico omitido) | Aplique um *default industry-standard* para o detalhe faltante; documente isso como uma premissa (*assumption*) explícita na *spec*. NÃO bloqueie. |
 | Descrição muito vaga (definição da feature deixa muitas decisões abertas) | Aplique padrões de *best-practices* para cada decisão em aberto e documente como premissas (*assumptions*) explícitas na *spec*; nunca deduza silenciosamente |
 | Nenhum codebase pattern encontrado (codebase não vazia, mas Pattern Discovery não retornou nada) | Faça *fallback* para *industry best practices* da *stack* detectada; documente como uma *assumption* explícita |
+| Conjunto de superfícies do contrato ambíguo (o PRD não indica claramente HTTP vs UI vs ambos) | Emita todas as superfícies com ao menos um sinal no PRD (Capabilities, Experience, Provides); documente a escolha em Assumptions |
+| Esclarecimento de quality gates (Step 2 — gates detectados) | Inclua automaticamente todos os *gates* detectados, aplicando a regra do *wrapper* do Step 2, sem perguntar; documente a lista em Assumptions para que o usuário possa revisar e fazer *override* depois. NÃO bloqueie. |
+| Esclarecimento de quality gates (Step 2 — nenhum gate detectado) | Omita a seção `## Quality gates` por inteiro; documente a ausência em Assumptions ("no quality gates detected in the project; section omitted"). NÃO bloqueie. |
+| Criação de issue (Step 6 — flag `create-issue` ausente) | O *orchestrator* já resolveu isso em B.4 (perguntou uma vez e propagou a todos os *sub-agents*). O *sub-agent* trata a ausência aqui como "não criar"; o *orchestrator* só encaminha `create-issue` quando o usuário optou por criar em B.4. NÃO pergunte; NÃO crie em silêncio. |
+| Criação de issue (Step 6 — flag `create-issue` presente, encaminhada pelo orchestrator) | Crie a *issue* conforme o Step 6, sem perguntar. Em caso de falha do `gh`, registre em `Soft-fails` (espelhando a regra do Step 6.5); NÃO bloqueie o sucesso do *sub-agent*. |
+| Falha do hard coverage gate do contrato em Batch Mode | O *sub-agent* falha a *feature* (nenhum arquivo salvo). Reportado ao *orchestrator* como qualquer outra falha (B.6) para que o usuário investigue |
 
-Todas as outras regras do spec-writer (conteúdo *PRD-driven*, aderência aos *codebase patterns*, validação SPEC/PLAN, nomenclatura *kebab-case*, *file structure*) se aplicam sem alterações.
+Todas as outras regras do spec-writer (conteúdo *PRD-driven*, aderência aos *codebase patterns*, validação SPEC/PLAN/CONTRACT, nomenclatura *kebab-case*, *file structure*) se aplicam sem alterações.
 
 **Requisito de documentação:** toda vez que um *sub-agent* aplica um *default* da *Auto-Accept* para uma decisão que o *PRD* não respondeu, ele DEVE registrar essa decisão na tabela *Assumptions* da Spec §4 (`Technical Decisions & Assumptions`), nomeando na coluna Origem a linha da policy que a produziu, para que o usuário possa revisar e corrigir depois.
 
@@ -358,14 +548,28 @@ Todas as outras regras do spec-writer (conteúdo *PRD-driven*, aderência aos *c
 **Precedência:** Quando uma *feature* está rodando em *Batch Mode*, os grupos de regras de (Batch Mode) abaixo se sobrepõem a qualquer regra conflitante nas listas gerais Always/Never — notavelmente, o *Batch Mode* sobrepõe as regras relacionadas à entrevista ("Preserve the iterative interview style", "Skip interview questions...", etc.). Todas as regras não conflitantes continuam válidas.
 
 **Sempre:**
-- Gere DOIS arquivos (*spec* e *plan*) em `docs/<feature-id>-<kebab-name>/`
-- Valide ambos os documentos antes de salvar
+- Gere TRÊS arquivos (*spec*, *plan* e *contract*) em `docs/<feature-id>-<kebab-name>/`
+- Valide os três documentos antes de salvar
 - Rode o *Codebase Pattern Discovery* em duas camadas (*baseline* + *broad*) antes da entrevista
 - Leia a *target feature* do *PRD* e use Consumes/Provides/Core Scope/Full Scope/Capabilities/Experience/Error Handling/acceptance criteria como contexto primário, mais os `RNF` aplicáveis (Seção 7), as decisões de produto (Seção 8), as dependências (Seção 9) e os critérios de validação (Seção 12) quando o PRD os tiver
 - O PRD é intencionalmente livre de decisões técnicas. Toda escolha de stack, arquitetura, modelagem e integração nasce aqui na spec (ou no HLD, se existir) — nunca assuma que o PRD já decidiu
 - Pule perguntas da entrevista cujas respostas já estejam no *PRD*, na *codebase*, ou em *specs* anteriores
 - Aplique o *mapping* PRD → SPEC consistentemente em todas as *features*
 - Preserve o estilo iterativo da entrevista: uma pergunta por vez, percorra a árvore de decisões, forneça uma resposta recomendada
+- Monte o *Coverage Manifest* do contrato a partir dos ACs in-scope — critérios da própria *feature* na Seção 11 e critérios de `Cross-Feature Integration` cujo `Owner` em A.6 é esta *feature* —, usando como chave da linha o texto do critério copiado do PRD, com o prefixo de ID
+- Filtre os critérios da própria *feature* cuja verificação cai fora do escopo `Included` do `spec.md`; descarte-os em silêncio do *manifest* (sem aviso no console, sem itens gerados)
+- Escreva o `contract.md` com conteúdo em pt-BR e âncoras estruturais em inglês, conforme a "Regra de Idioma" de `references/contract-template.md`
+- Monte a seção *Prerequisites* do contrato como condições prospectivas derivadas da arquitetura da *spec* e das referências dos itens, com as **cinco subseções fixas** (Runtime services, Persistent state, Static inputs, Configuration, External dependencies). Enquadre essas condições para que sejam lidas tanto como entregas de quem constrói a *feature* (produzi-las junto com o código) quanto como pré-condições de quem exercita o contrato depois — nunca como bloqueios ao desenvolvimento antes de a *feature* existir
+- Monte a seção `## Quality gates` do contrato (quando *gates* forem confirmados no esclarecimento do Step 2) entre `## Prerequisites` e `## Coverage Manifest`. Cada entrada é `- **<name>** — \`<command>\` — <descrição do que significa passar>`. Mantenha a seção agnóstica de consumidor: descreva o *gate*, nunca o executor
+- Procure um *script wrapper* que execute todos os *gates* de uma vez antes de listar *scripts* individuais como *quality gates*
+- Reutilize as convenções do projeto capturadas no Step 1.3 (*seeding* de estado persistente, *path* de *static inputs*/*fixtures*, configuração de teste, *mocks*) ao gerar os *Prerequisites* — um *path*/mecanismo declarado por um contrato anterior ou já presente na *codebase* é autoritativo; nunca invente alternativas ad hoc
+- Mantenha `Persistent state` (entidades, contas, registros, mensagens, tokens — declarados de forma declarativa) estritamente separado de `Static inputs` (arquivos em disco no *path* de *fixtures* do projeto)
+- Garanta que todo *handle* referenciado por qualquer item (nome de conta em `Persistent state`, *path* de arquivo em `Static inputs`) esteja declarado na subseção correspondente E que toda declaração tenha ao menos um item consumidor na cláusula `Used by:` (sem declarações órfãs)
+- Aplique o *hard coverage gate* do contrato antes de salvar: se qualquer AC in-scope tiver zero itens cobrindo, aborte os três arquivos
+- Limite os *Prerequisites* do contrato ao fecho de dependências desta *feature* no `Dependency Graph`: todo recurso declarado (Persistent state, Static inputs, Configuration, Runtime services, External dependencies) é satisfazível pela própria *feature* ou por uma de suas dependências declaradas. Quando um AC in-scope precisa de infraestrutura que só uma *feature* irmã fora do fecho normalmente produziria, aplique o **Preparation Pattern** (declare um *stub*/*override*/*flag* interno da *feature* e exija que esta *feature* o entregue como parte do próprio escopo) em vez de referenciar o estado real da *feature* irmã
+- Aplique o Step 6 (Issue Creation) conforme a lógica de *flag*/pergunta documentada — com a *flag* `create-issue` presente, crie a *issue* sem perguntar; ausente no *single-feature mode* interativo, pergunte uma vez antes de criar; ausente no *Batch Mode*, trate a ausência como "não criar" (o *orchestrator* já resolveu a pergunta em B.4)
+- Detecte *issues* abertas existentes com `gh issue list --search "[F<ID>] in:title" --state open --json number,url --limit 5` antes de criar uma nova — se houver correspondência, pule a criação e reutilize a URL da primeira na saída do spec-writer
+- Trate falhas do `gh` durante o Step 6 como *soft-fails* — registre em `Soft-fails` na saída do spec-writer e continue; os arquivos da *spec* já foram salvos no Step 5 e não devem ser revertidos
 
 **Nunca:**
 - Coloque código real na *spec* (descreva apenas a estrutura)
@@ -377,11 +581,33 @@ Todas as outras regras do spec-writer (conteúdo *PRD-driven*, aderência aos *c
 - Prossiga sem um *PRD* — sempre exija um e direcione o usuário para o `prd-writer` caso ausente
 - Faça novamente perguntas cujas respostas sejam observáveis na *codebase* ou já declaradas no *PRD*
 - Restrinja a exploração da *codebase* ao *checklist* de *baseline* — o *baseline* é um piso, não um teto
+- Salve a *spec* ou o *plan* quando o *coverage gate* do contrato falhar — os três são salvos juntos ou nenhum
+- Emita uma tabela de mapeamento de acceptance criteria (ou qualquer linha AC ↔ teste) no `spec.md`, ou adicione uma coluna "Critério de aceite coberto" a qualquer sub-tabela da *Testing Strategy* — o *Coverage Manifest* do `contract.md` é a fonte única dessa ligação
+- Anote "OUT OF SCOPE for F<ID>" dentro do `spec.md` para critérios cross-feature — o filtro é codificado em silêncio pela ausência desses critérios no *Coverage Manifest* do `contract.md`, e o `spec.md` não deve duplicar esse sinal
+- Coloque critérios `(RNF<NN>)` do bloco `Non-Functional Acceptance` no *Coverage Manifest* ou em itens do contrato
+- Coloque um critério de `Cross-Feature Integration` no contrato de uma *feature* que não é o `Owner` do cenário em A.6
+- Emita uma seção `## Service` no `contract.md` sem um consumidor real fora desta *feature*
+- Gere itens de contrato por classe, por VO, por *helper* ou por arquivo de teste — os itens descrevem comportamento de fronteira, não unidades internas
+- Use sub-headers de entidade de superfície no contrato (`### POST /auth/register`, `### /login page`) — apenas vocabulário de *capability*
+- Omita a linha `Verification mode:` em qualquer seção do contrato
+- Edite o `contract.md` à mão depois da geração — a regeneração é integral
+- Gere itens cujo comportamento depende de uma *feature* FORA do fecho de dependências desta *feature* no `Dependency Graph` — seja a jusante (uma *feature* que depende desta) ou irmã (sem aresta em nenhuma direção). Itens cujo comportamento pertence a outra *feature* vivem no contrato dela; itens cujo comportamento é desta *feature*, mas cujo *setup* de teste precisa de infraestrutura de fora, usam o *Preparation Pattern*.
+- Imprima um aviso no console quando um critério cross-feature for descartado — o descarte é silencioso por design
+- Descreva *Prerequisites* como retratos do estado existente — são condições prospectivas que precisam valer antes de os itens serem exercitados
+- Mencione "agente implementador", "evaluator", "agente avaliador" ou qualquer consumidor específico no `contract.md` gerado — o contrato é agnóstico de consumidor
+- Use comentários HTML (`<!-- ... -->`) em qualquer lugar do `contract.md` gerado — eles quebram alguns visualizadores de markdown; use a linha de regeneração em itálico abaixo do título
+- Referencie um *handle* (conta, sessão, registro, *path* de arquivo) no `given`/`when` de qualquer item sem declará-lo na subseção de *Prerequisites* correspondente (`Persistent state` ou `Static inputs`)
+- Misture `Persistent state` com `Static inputs` — declarar uma conta ou registro em `Static inputs`, ou um arquivo em `Persistent state`
+- Escreva entradas de `Persistent state` de forma operacional ("rode esta migration", "execute este seed") em vez de declarativa ("alice existe com X atributos")
+- Invente *paths* de *fixtures* em `Static inputs` quando o projeto já tem uma convenção de *path* de *fixtures* descoberta (ou um contrato anterior que declarou uma) — reutilize a convenção existente
+- Divirja de uma convenção do projeto sem documentar uma Assumption explícita explicando por quê
+- Declare um *Prerequisite* que exija que uma *feature* FORA do fecho de dependências desta *feature* esteja implementada (ex.: declarar `landing-returning-user` como um usuário autenticado real em `Persistent state` quando esta *feature* não depende da *feature* de *auth*). A correção é o **Preparation Pattern**: troque o *prereq* por um *stub*, *override* ou ajuste de configuração interno que esta própria *feature* entrega como parte do escopo, para que o contrato seja exercitável quando apenas esta *feature* + suas dependências declaradas estiverem implementadas
+- Confunda "preparação para uma *feature* irmã" com "dependência de uma *feature* irmã". Uma *feature* PODE construir interfaces, *hooks* e *stubs* em que outras *features* vão se encaixar depois (preparação) — isso NÃO torna essas outras *features* suas dependências, e os *Prerequisites* precisam refletir essa fronteira
 
 **Sempre (Batch Mode):**
 - Valide a regra de *same-wave* antes do *dispatch*; rejeite *batches* *cross-wave*
 - Apresente um *plan* consolidado e aguarde confirmação explícita antes de fazer o *dispatch* dos *sub-agents*
-- Pule *features* cujos arquivos `spec.md` já existam, a menos que o usuário solicite explicitamente a regeneração
+- Pule *features* cujos `spec.md`, `plan.md` E `contract.md` já existam, a menos que o usuário solicite explicitamente a regeneração. Se apenas um ou dois dos três estiverem presentes, trate a *feature* como incompleta e regenere o conjunto completo
 - Rode as *Foundation features* sequencialmente quando a *codebase* for *greenfield* ou *Partial Foundation*
 - Aplique a *Auto-Accept Policy* dentro de cada *sub-agent* em vez de conduzir a entrevista interativa
 
@@ -420,6 +646,8 @@ Todas as outras regras do spec-writer (conteúdo *PRD-driven*, aderência aos *c
 **A feature requer novas tecnologias não presentes na codebase:** Liste as novas dependências, peça a confirmação do usuário e documente nas decisões.
 
 **Múltiplos patterns conflitantes na codebase:** Apresente ambos, pergunte qual seguir, documente a escolha.
+
+**PRD sem `A.6 Use Scenario Coverage`:** Nenhum critério de `Cross-Feature Integration` entra no contrato desta *feature*. Siga com os critérios da própria *feature* e registre a lacuna nas *assumptions* da *spec*.
 
 **Limpeza do nome da feature para kebab-case:** use minúsculas, substitua espaços por hifens, remova caracteres fora de `[a-z0-9-]`. Exemplo: `F07. Background Video Processing Pipeline` → `F07-background-video-processing-pipeline`.
 

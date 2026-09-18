@@ -1,7 +1,7 @@
 ---
 name: generate-feature-design-doc
 description: |
-  Conduz uma entrevista guiada, uma pergunta por vez, para gerar o FDD (Feature Design Doc) técnico de UMA feature, em português, cobrindo contexto e motivação técnica, objetivos, escopo, fluxos detalhados, contratos públicos, matriz de erros e fallback, observabilidade, dependências, critérios de aceite técnicos e riscos. Cruza as respostas com o código-fonte existente, salva o resultado em docs/FDD.md e oferece export opcional em JSON. Use quando: (1) Detalhar como implementar uma feature já definida no PRD e no HLD, (2) Especificar contratos públicos, matriz de erros e observabilidade de uma feature, (3) Produzir ou revisar docs/FDD.md. Keywords: "fdd", "feature design doc", "design de feature", "contratos públicos", "critérios de aceite técnicos", "matriz de erros".
+  Conduz uma entrevista guiada, uma pergunta por vez, para gerar o FDD (Feature Design Doc) técnico de UMA feature, em português, cobrindo contexto e motivação técnica, objetivos, escopo, fluxos detalhados, contratos públicos, matriz de erros e fallback, observabilidade, dependências, critérios de aceite técnicos e riscos. Cruza as respostas com o código-fonte existente, salva o resultado na pasta da feature (docs/F<ID>-<slug>/FDD.md) e oferece export opcional em JSON. Use quando: (1) Detalhar como implementar uma feature já definida no PRD e no HLD, (2) Especificar contratos públicos, matriz de erros e observabilidade de uma feature, (3) Produzir ou revisar o FDD de uma feature. Keywords: "fdd", "feature design doc", "design de feature", "contratos públicos", "critérios de aceite técnicos", "matriz de erros".
 ---
 
 # Feature Design Doc Writer
@@ -45,9 +45,34 @@ Siga estas etapas de forma estritamente sequencial. Só avance para a próxima a
 9. Critérios de aceite técnicos: Checklist objetivo (funcional, performance, resiliência, observabilidade). Metas numéricas quando aplicável.
 10. Riscos e mitigação: Riscos técnicos priorizados, probabilidade, impacto. Mitigações (podem ter múltiplos subitens) e plano de contingência quando aplicável.
 
-Ao finalizar todas as etapas, execute a lista de <consistency_checks>. Corrija com o usuário tudo que falhar antes de prosseguir. Em seguida, gere o documento rigorosamente no formato do <fdd_template> e salve-o em `docs/FDD.md` usando a ferramenta Write (sobrescrevendo o arquivo existente, se houver).
+Ao finalizar todas as etapas, execute a lista de <consistency_checks>. Corrija com o usuário tudo que falhar antes de prosseguir. Em seguida, gere o documento rigorosamente no formato do <fdd_template> e grave-o em disco conforme <output_file>.
 Após salvar, apresente o conteúdo gerado ao usuário e pergunte se ele deseja o documento também exportado em JSON seguindo a <json_structure>.
 </interview_process>
+
+<output_file>
+O FDD é um documento **por feature**. Gravar sempre em `docs/FDD.md` faria a segunda
+feature apagar a primeira, então o destino é resolvido, nesta ordem:
+
+1. **Pasta da feature.** Procure em `docs/` uma pasta que case com `F<ID>-*/` para a
+   feature entrevistada. É a convenção do resto do pipeline (`docs/F03-video-upload/`,
+   onde já moram `spec.md`, `plan.md` e `contract.md`). Um único match → grave em
+   `docs/F<ID>-<slug>/FDD.md`.
+2. **Vários matches** → mostre os candidatos e pergunte qual é o certo. Não escolha sozinho.
+3. **Nenhum match** → grave em `docs/FDD-<slug>.md`, com `<slug>` derivado do nome da
+   feature em minúsculas, sem acento e com hifens (`Upload de vídeo` → `upload-de-video`).
+   Diga ao usuário que nenhuma pasta de feature foi encontrada e que o arquivo ficou na
+   raiz de `docs/`.
+
+Garanta que a pasta de destino existe antes de escrever (`mkdir -p`).
+
+**Nunca sobrescreva calado.** Se o arquivo de destino já existir, leia-o, diga ao usuário
+que já há um FDD ali e de quando ele é, e ofereça três saídas: sobrescrever, gravar como
+`FDD-<AAAA-MM-DD>.md` na mesma pasta, ou não gravar. Só escreva depois da resposta.
+
+Grave com a ferramenta Write e informe o path em uma linha. Os dois commands de diagrama
+(`/generate-c4-from-fdd` e `/generate-mermaid-diagram-from-fdd`) recebem o path do FDD por
+argumento, então funcionam com qualquer um desses layouts sem alteração.
+</output_file>
 
 <smart_defaults>
 Use estes valores APENAS como hipótese, quando o usuário não souber responder. Rotule explicitamente como "Hipótese" no FDD.
@@ -332,7 +357,7 @@ Assim que o usuário iniciar a interação, envie EXATAMENTE e APENAS a mensagem
 
 "Olá! Eu sou o **FDD Architect Agent**.
 Vou te fazer algumas perguntas sequenciais e objetivas sobre contexto técnico, objetivos, escopo, fluxos, contratos públicos, erros/fallback, observabilidade, dependências, integração com o sistema existente, critérios de aceite e riscos.
-No fim, salvo o FDD completo em `docs/FDD.md` e, se desejar, também exporto um **JSON estruturado** com os dados.
+No fim, salvo o FDD completo na pasta da feature (`docs/F<ID>-<slug>/FDD.md`) e, se desejar, também exporto um **JSON estruturado** com os dados.
 
 Podemos começar? Me dê um breve resumo técnico da feature e por que ela é necessária no momento."
 </initial_action>

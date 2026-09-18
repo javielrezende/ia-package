@@ -14,17 +14,17 @@ Você tem a tarefa de criar um documento abrangente de diretrizes de desenvolvim
 
 **Parâmetros Suportados** (todos opcionais):
 
-- `-orm=<name>` - ORM ou query builder (ex: prisma, sqlalchemy, sqlc, gorm, hibernate)
-- `-web=<name>` - Framework Web (ex: express, fastapi, chi, spring-boot, gin, flask)
-- `-framework=<name>` - Framework Principal (ex: laravel, nestjs, langgraph, langchain, spring, django)
-- `-db=<name>` - Driver de Banco de Dados (ex: pgx, asyncpg, mysql2, jdbc, psycopg2)
-- `-testing=<name>` - Framework de Testes (ex: jest, pytest, testify, junit, vitest)
-- `-logging=<name>` - Biblioteca de Logs (ex: winston, structlog, zap, logrus, log4j)
-- `-validation=<name>` - Biblioteca de Validação (ex: zod, pydantic, validator, joi)
-- `-http=<name>` - Cliente HTTP (ex: axios, requests, resty, okhttp, httpx)
-- `-di=<name>` - Injeção de Dependências (ex: inversify, wire, spring, dagger)
-- `-async=<name>` - Runtime Assíncrono (ex: tokio, asyncio, async-std, gevent)
-- `-serialization=<name>` - Biblioteca de Serialização (ex: serde, jackson, gson, msgpack)
+- `--orm=<name>` - ORM ou query builder (ex: prisma, sqlalchemy, sqlc, gorm, hibernate)
+- `--web=<name>` - Framework Web (ex: express, fastapi, chi, spring-boot, gin, flask)
+- `--framework=<name>` - Framework Principal (ex: laravel, nestjs, langgraph, langchain, spring, django)
+- `--db=<name>` - Driver de Banco de Dados (ex: pgx, asyncpg, mysql2, jdbc, psycopg2)
+- `--testing=<name>` - Framework de Testes (ex: jest, pytest, testify, junit, vitest)
+- `--logging=<name>` - Biblioteca de Logs (ex: winston, structlog, zap, logrus, log4j)
+- `--validation=<name>` - Biblioteca de Validação (ex: zod, pydantic, validator, joi)
+- `--http=<name>` - Cliente HTTP (ex: axios, requests, resty, okhttp, httpx)
+- `--di=<name>` - Injeção de Dependências (ex: inversify, wire, spring, dagger)
+- `--async=<name>` - Runtime Assíncrono (ex: tokio, asyncio, async-std, gevent)
+- `--serialization=<name>` - Biblioteca de Serialização (ex: serde, jackson, gson, msgpack)
 
 **Exemplos**:
 /generate-development-guideline Go --orm=sqlc --web=chi --db=pgx --testing=testify
@@ -68,7 +68,7 @@ Devem ter exemplos de código: 7 (Funções), 8 (Erros), 11 (Testes), 22 (Banco 
 
 **Crie uma configuração de "Stack do Projeto" com padrões automáticos**:
 
-1. Extraia todos os parâmetros `-key=value` do comando
+1. Extraia todos os parâmetros `--key=value` do comando (aceite também a forma com um hífen só, `-key=value`)
 2. **Preencha automaticamente as categorias essenciais** se não especificadas:
     - `testing`: Selecione automaticamente o framework mais popular para a linguagem
     - `formatting`: Selecione automaticamente o formatador padrão (black, gofmt, prettier, rustfmt)
@@ -268,7 +268,7 @@ Avalie cada seção opcional:
 
 **Filosofia dos Exemplos de Código**:
 
-- Se o usuário **ESPECIFICOU** uma biblioteca ou framework nos parâmetros (ex: `-orm=prisma`, `-web=chi`), **VOCÊ DEVE OBRIGATORIAMENTE utilizar essa ferramenta nos exemplos de código**.
+- Se o usuário **ESPECIFICOU** uma biblioteca ou framework nos parâmetros (ex: `--orm=prisma`, `--web=chi`), **VOCÊ DEVE OBRIGATORIAMENTE utilizar essa ferramenta nos exemplos de código**.
 - Para categorias **NÃO ESPECIFICADAS** pelo usuário, use recursos da Standard Library (stdlib) nativos da linguagem como fallback.
 
 **Abordagem de Exemplo por Seção**:
@@ -337,7 +337,15 @@ Forneça o seguinte:
 **2. Resumo da Pesquisa**: Fontes consultadas e ecossistema básico.
 **3. Relatório de Inclusão de Seções**: Quais foram incluídas/excluídas e o porquê.
 **4. Relatório Final da Stack**.
-**5. Documento Final**: O guia completo markdown consolidado com "Stack do Projeto" (se pertinente), salvo virtualmente como `{{LANGUAGE}}-development-guidelines.md`.
+**5. Documento Final**: O guia completo markdown consolidado com "Stack do Projeto"
+(se pertinente), **gravado com a ferramenta Write** em
+`docs/<linguagem>-development-guidelines.md`, com a linguagem em minúsculas e hifens
+(`Go` → `docs/go-development-guidelines.md`, `TypeScript` →
+`docs/typescript-development-guidelines.md`). É um arquivo por linguagem: gerar a
+diretriz de outra linguagem nunca apaga a anterior. Crie `docs/` se não existir
+(`mkdir -p docs`), pergunte antes de sobrescrever um arquivo já existente, e informe o
+path gravado em uma linha. Entregar o documento só no chat não conta como entrega: as
+outras etapas do pipeline leem o arquivo, não a conversa.
 **6. Relatório de Validação**.
 
 ## ANTI-PADRÕES A EVITAR

@@ -27,13 +27,13 @@ skills gerarem documentos aderentes ao projeto em vez de genéricos.
 **Entrevistas** (`skills/for-interviews/`) — uma pergunta por vez, saída em Markdown
 com export opcional em JSON:
 
-| Skill | Produz |
-|---|---|
-| `generate-prd-for-feature` | PRD de **uma** feature |
-| `generate-high-level-design` | HLD: arquitetura, componentes, fluxos, modelo de dados |
-| `generate-feature-design-doc` | FDD: contratos públicos, matriz de erros, observabilidade |
-| `generate-deep-research-part-1` | Briefing de pesquisa (até 6 perguntas) |
-| `generate-deep-research-part-2` | Formata o resultado da pesquisa em 16 seções |
+| Skill | Produz | Onde grava |
+|---|---|---|
+| `generate-prd-for-feature` | PRD de **uma** feature | `docs/F<ID>-<slug>/PRD.md` |
+| `generate-high-level-design` | HLD: arquitetura, componentes, fluxos, modelo de dados | `docs/HLD.md` |
+| `generate-feature-design-doc` | FDD: contratos públicos, matriz de erros, observabilidade | `docs/F<ID>-<slug>/FDD.md` |
+| `generate-deep-research-part-1` | Briefing de pesquisa (até 6 perguntas) | saída no chat |
+| `generate-deep-research-part-2` | Formata o resultado da pesquisa em 16 seções | saída no chat |
 
 **Execução:**
 
@@ -45,7 +45,7 @@ com export opcional em JSON:
 | `evaluator` | Exercita cada item do `contract.md` ponta a ponta num ambiente efêmero e grava o veredito em `eval-report-<ts>.md` |
 | `design-review` | Avalia a qualidade visual da UI de uma feature: captura screenshots em 3 viewports e nos estados de borda, roda um piso mecânico de acessibilidade e grava notas por dimensão mais uma lista de correções em `design-report-<ts>.md` |
 | `fix-runner` | Passada corretiva sobre os itens reprovados de um eval-report, sobre os achados de um design-report, ou resolução de conflitos de merge |
-| `generate-development-guideline` | Diretriz de desenvolvimento por linguagem/stack |
+| `generate-development-guideline` | Diretriz de desenvolvimento por linguagem/stack, em `docs/<linguagem>-development-guidelines.md` |
 
 **Orquestração** — encadeiam as skills acima em loop, sem intervenção entre os ciclos:
 
@@ -97,6 +97,31 @@ Rodam sozinhos, sem invocação. Ficam em silêncio quando não têm nada a dize
 Os dois primeiros são hooks de comando (bash + python3, sem dependências externas);
 o terceiro é um hook `prompt`, avaliado por um modelo. Exigem apenas `bash` e `python3`
 no PATH — se `python3` faltar, os scripts saem em silêncio em vez de quebrar a sessão.
+
+## Onde os documentos são gravados
+
+As entrevistas não terminam no chat: cada uma grava o arquivo e informa o path. É o que
+faz a etapa seguinte encontrar o que a anterior escreveu — o hook de sessão só enxerga
+arquivo, e o `spec-writer` lê o que está em disco, não o que passou na conversa.
+
+| Documento | Path | Regra |
+|---|---|---|
+| PRD do produto | `docs/PRD.md` | um por projeto |
+| HLD | `docs/HLD.md` | um por projeto |
+| PRD de feature | `docs/F<ID>-<slug>/PRD.md` | um por feature |
+| FDD | `docs/F<ID>-<slug>/FDD.md` | um por feature |
+| Diretriz de código | `docs/<linguagem>-development-guidelines.md` | um por linguagem |
+
+O PRD de feature e o FDD são resolvidos pela pasta da feature (`docs/F03-video-upload/`,
+a mesma que guarda `spec.md`, `plan.md` e `contract.md`). Quando nenhuma pasta casa — a
+entrevista foi feita antes do PRD do produto —, o arquivo cai em `docs/PRD-<slug>.md` ou
+`docs/FDD-<slug>.md` e a skill diz que fez isso. Quando mais de uma casa, ela pergunta em
+vez de escolher.
+
+**Nada é sobrescrito calado.** Se o arquivo de destino já existe, a skill mostra o que há
+lá e oferece três saídas: sobrescrever, gravar com a data no nome, ou não gravar. O
+`generate-prd-for-feature` nunca escreve em `docs/PRD.md`: esse path é do PRD do produto
+inteiro, e o resto do pipeline o usa como fonte de escopo.
 
 ## A branch de trabalho
 

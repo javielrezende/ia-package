@@ -19,16 +19,23 @@ Todo artefato do pipeline vive em `docs/`:
 | Estado das features | `docs/prd_progress.json` | `prd-writer-for-complete-project`, atualizado pelo resto do pipeline |
 | PRD de uma feature | `docs/<Fxx-nome>/PRD.md` | `generate-prd-for-feature` |
 | High-Level Design | `docs/HLD.md` | `generate-high-level-design` |
-| Feature Design Doc | `docs/FDD.md` | `generate-feature-design-doc` |
+| Feature Design Doc | `docs/<Fxx-nome>/FDD.md` | `generate-feature-design-doc` |
 | Spec + plano + contrato | `docs/<Fxx-nome>/spec.md`, `plan.md` e `contract.md` | `spec-writer` |
 | Relatório de avaliação | `docs/<Fxx-nome>/eval-report-<ts>.md` | `evaluator` |
 | Journal de orquestração | `docs/<Fxx-nome>/orchestration-<ts>.md` | `implement-and-evaluate` |
 | ADRs | `docs/adrs/generated/` | agentes `adr-*` |
 | Diagramas C4 | `docs/c4/` | `/generate-c4-from-fdd` |
 | Diagramas Mermaid | `docs/mermaid/` | `/generate-mermaid-diagram-from-fdd` |
-| Diretriz de código | `docs/development-guideline.md` | `generate-development-guideline` |
+| Diretriz de código | `docs/<linguagem>-development-guidelines.md` | `generate-development-guideline` |
 
 Pastas de feature seguem `docs/F01-nome-da-feature/`, com o ID vindo do PRD do produto.
+O PRD de feature e o FDD são **um por feature** e moram nessa pasta. Quando a pasta ainda
+não existe (entrevista feita antes do PRD do produto), eles caem em `docs/PRD-<nome>.md` e
+`docs/FDD-<nome>.md`, na raiz de `docs/`. Nenhum dos dois sobrescreve arquivo existente
+sem perguntar, e nenhum deles escreve em `docs/PRD.md` — esse é o PRD do produto inteiro.
+
+A diretriz de código é um arquivo por linguagem: `docs/go-development-guidelines.md`,
+`docs/typescript-development-guidelines.md`.
 
 Os `eval-report-*.md` e os `orchestration-*.md` são histórico imutável com timestamp:
 nunca são editados à mão nem sobrescritos, e cada execução gera um arquivo novo.

@@ -14,13 +14,37 @@ add() { found="${found}\n- $1"; }
 
 [ -f "docs/PRD.md" ]  && add "PRD:   docs/PRD.md"
 [ -f "docs/HLD.md" ]  && add "HLD:   docs/HLD.md"
+
+# O FDD e o PRD de feature são um por feature: moram na pasta da feature quando ela
+# existe (reportados no laço abaixo) e caem na raiz de docs/ quando não existe.
+# O docs/FDD.md sem sufixo é o layout antigo, de quando a skill gravava sempre no
+# mesmo arquivo — continua sendo reportado para quem já tem um.
 [ -f "docs/FDD.md" ]  && add "FDD:   docs/FDD.md"
+
+loose_docs=$(find docs -maxdepth 1 -type f \( -name 'FDD-*.md' -o -name 'PRD-*.md' \) 2>/dev/null | sort | head -20)
+if [ -n "$loose_docs" ]; then
+  while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    add "Doc:   $f (sem pasta de feature)"
+  done <<< "$loose_docs"
+fi
+
+# Diretriz de código: um arquivo por linguagem (docs/go-development-guidelines.md).
+guidelines=$(find docs -maxdepth 1 -type f -name '*development-guideline*.md' 2>/dev/null | sort | head -10)
+if [ -n "$guidelines" ]; then
+  while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    add "Diretriz: $f"
+  done <<< "$guidelines"
+fi
 
 feature_dirs=$(find docs -maxdepth 1 -type d -name 'F[0-9][0-9]*' 2>/dev/null | sort | head -20)
 if [ -n "$feature_dirs" ]; then
   while IFS= read -r d; do
     [ -z "$d" ] && continue
     marks=""
+    [ -f "$d/PRD.md" ]      && marks="${marks}prd "
+    [ -f "$d/FDD.md" ]      && marks="${marks}fdd "
     [ -f "$d/spec.md" ]     && marks="${marks}spec "
     [ -f "$d/plan.md" ]     && marks="${marks}plan "
     [ -f "$d/contract.md" ] && marks="${marks}contract "

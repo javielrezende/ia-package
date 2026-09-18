@@ -37,7 +37,7 @@ Aceite *free-form input* do usuário. O usuário pode referenciar a *feature* po
 - Se o *input* for ambíguo (ex: "upload" corresponde a múltiplas *features*), confirme com o usuário antes de prosseguir.
 - Se a *feature* referenciada não existir no *PRD*, liste as *features* disponíveis da tabela de dependências (`Appendix A: Implementation Planning` → `Dependency Graph`; em PRDs antigos, Seção 8) e peça ao usuário para esclarecer.
 
-**Flag opcional:** o *input* pode incluir `create-issue` (em qualquer posição). Quando presente, a *skill* cria uma *issue* de acompanhamento no GitHub para a *feature* no Step 6, sem perguntar. Quando ausente no *single-feature mode*, o Step 6 pergunta `y/n` ao usuário antes de criar; quando ausente no *Batch Mode*, o *plan* consolidado do *orchestrator* (B.4) pergunta uma única vez e a resposta vale para todas as *features* do *batch*. Veja o **Step 6** para o fluxo de criação da *issue* e o **Batch Mode** para a interação em *batch*.
+**Flag opcional:** o *input* pode incluir `create-issue` (em qualquer posição). Quando presente, a *skill* cria uma *issue* de acompanhamento no forge do projeto (GitHub ou GitLab, resolvido conforme `${CLAUDE_PLUGIN_ROOT}/references/forge.md`) para a *feature* no Step 6, sem perguntar. Quando ausente no *single-feature mode*, o Step 6 pergunta `y/n` ao usuário antes de criar; quando ausente no *Batch Mode*, o *plan* consolidado do *orchestrator* (B.4) pergunta uma única vez e a resposta vale para todas as *features* do *batch*. Veja o **Step 6** para o fluxo de criação da *issue* e o **Batch Mode** para a interação em *batch*.
 
 **PRD é obrigatório.** Se nenhum *PRD* for encontrado no projeto, pare e instrua o usuário a gerar um primeiro com a *skill* `prd-writer`. Não faça *fallback* para uma entrevista não estruturada.
 
@@ -313,21 +313,19 @@ Abortar os três arquivos (e não só o contrato) mantém a pasta da *feature* c
 
 ### Step 6: Issue Creation (opcional)
 
-Depois que o Step 5 salvar os três arquivos com sucesso, decida se abre uma *issue* de acompanhamento no GitHub para esta *feature*.
+Depois que o Step 5 salvar os três arquivos com sucesso, decida se abre uma *issue* de acompanhamento no forge do projeto para esta *feature*.
+
+**6.0 — Resolver o forge.** Só quando o 6.1 decidir que vai criar. Resolva o forge (`github` | `gitlab`) e faça a pré-checagem do CLI conforme `${CLAUDE_PLUGIN_ROOT}/references/forge.md` (seções 1 e 2) — esse arquivo é canônico para as operações de forge desta *skill*; não improvise comandos de CLI. CLI ausente ou não autenticado NÃO aborta: cai no 6.5 como *soft-fail*, com a dica de instalação. Use o termo do forge resolvido no texto que o usuário lê ("issue" vale para os dois).
 
 **6.1 — Decidir se cria.**
 
 - Se a *flag* `create-issue` estava no *input* → siga para 6.2 sem perguntar.
-- Se ausente (*single-feature mode*) → pergunte ao usuário: `"Create a GitHub issue for F<ID> <Feature Name>? (y/n)"`. Siga para 6.2 apenas com `y` / `yes` / `sim`. Qualquer outra resposta (ou `n`) pula a criação por inteiro; vá para o Step 7.
+- Se ausente (*single-feature mode*) → pergunte ao usuário: `"Create a <GitHub|GitLab> issue for F<ID> <Feature Name>? (y/n)"`, nomeando o forge resolvido no 6.0. Siga para 6.2 apenas com `y` / `yes` / `sim`. Qualquer outra resposta (ou `n`) pula a criação por inteiro; vá para o Step 7.
 - Se ausente (*Batch Mode*) → o *orchestrator* já perguntou uma vez em B.4 e propagou a decisão. O *sub-agent* trata a ausência aqui como "não criar", porque o *orchestrator* só encaminha `create-issue` quando o usuário optou por criar. Vá para o Step 7.
 
 **6.2 — Detectar issue aberta existente.**
 
-Procure no GitHub uma *issue* aberta cujo título comece com `[F<ID>]`:
-
-```
-gh issue list --search "[F<ID>] in:title" --state open --json number,url --limit 5
-```
+Procure no forge uma *issue* aberta cujo título comece com `[F<ID>]`, com a operação **"listar issue aberta por prefixo de título"** (`references/forge.md` § 3.2). Aplique o filtro de título do lado do chamador que a seção descreve — o `--search` do `glab` varre título e descrição, e sem o filtro uma *issue* que apenas cite `[F<ID>]` no corpo passaria por correspondência.
 
 - **Uma correspondência aberta** → pule a criação. Guarde a URL existente para a saída do Step 7.
 - **Várias correspondências abertas** → use a primeira; registre em `Soft-fails`: `"multiple open issues with [F<ID>] prefix; reporting only #<first-number>"`.
@@ -387,18 +385,11 @@ Implementa **F<ID>: <Nome da Feature>**.
 🤖 Gerada automaticamente. Cada critério de aceite acima será verificado ponta a ponta contra o contrato.
 ````
 
-**6.4 — Criar a issue.**
+**6.4 — Criar a issue.** Aplique a operação **"criar issue"** (`references/forge.md` § 3.3) com o título e o corpo montados no 6.3, usando o CLI do forge resolvido no 6.0.
 
-```
-gh issue create --title "<title>" --body "$(cat <<'EOF'
-<body content>
-EOF
-)"
-```
+Guarde a URL da *issue* retornada (`url` no GitHub, `web_url` no GitLab). NÃO adicione *labels*, *assignees*, *milestones* nem *projects* — nenhum é definido por padrão. Times que os queiram configuram os *defaults* do repositório no próprio forge ou os aplicam manualmente depois da criação.
 
-Guarde a URL da *issue* retornada. NÃO adicione *labels*, *assignees*, *milestones* nem *projects* — nenhum é definido por padrão. Times que os queiram configuram os *defaults* do repositório no GitHub ou os aplicam manualmente depois da criação.
-
-**6.5 — Tratamento de falha.** Se o `gh` sair com código diferente de zero (*auth*, rede, `gh` não instalado, repositório não conectado), NÃO aborte a execução. Os três arquivos já estão salvos — essa é a entrega principal da *skill*. Registre em `Soft-fails`: `"issue not created: <gh stderr excerpt>; run manually: gh issue create --title \"<title>\" --body-file <path-to-body>.md"`. Siga para o Step 7.
+**6.5 — Tratamento de falha.** Se o CLI do forge sair com código diferente de zero (*auth*, rede, CLI não instalado, repositório não conectado), NÃO aborte a execução. Os três arquivos já estão salvos — essa é a entrega principal da *skill*. Registre em `Soft-fails`: `"issue not created: <stderr excerpt>; run manually: <comando de criação de issue do forge, § 3.3, com --body-file/--description-file apontando para <path-to-body>.md>"`. Siga para o Step 7.
 
 ### Step 7: Output Result
 
@@ -480,7 +471,7 @@ OK to proceed? (yes/no)
 
 Prossiga apenas com um "yes" explícito. Diante de um "no" ou qualquer resposta negativa/ambígua, aborte o processo de forma limpa, sem fazer *dispatch* dos *sub-agents* e sem criar nenhum arquivo. Se o usuário quiser alterar o *plan*, ele re-invoca a *skill* com o *input* atualizado. As *features* marcadas como "already has spec" são ignoradas por padrão; o usuário pode solicitar a regeneração na resposta de confirmação (ex: "yes, regenerate F07").
 
-**Pergunta de criação de issue (apenas quando a *flag* `create-issue` NÃO estava no *input* do *batch*):** depois que o usuário responder "yes" ao *plan* consolidado acima, faça uma pergunta adicional: `"Also create a GitHub issue per feature in this batch? (y/n)"`. A resposta vale para **todas** as *features* do *batch* — os *sub-agents* não perguntam individualmente. Registre a resposta:
+**Pergunta de criação de issue (apenas quando a *flag* `create-issue` NÃO estava no *input* do *batch*):** depois que o usuário responder "yes" ao *plan* consolidado acima, faça uma pergunta adicional: `"Also create a <GitHub|GitLab> issue per feature in this batch? (y/n)"`, nomeando o forge resolvido conforme `${CLAUDE_PLUGIN_ROOT}/references/forge.md`. A resposta vale para **todas** as *features* do *batch* — os *sub-agents* não perguntam individualmente. Registre a resposta:
 - `y` / `yes` / `sim` → defina a *flag* `create-issue` e encaminhe-a no *prompt* de todos os *sub-agents* em B.5.
 - qualquer outra coisa → não encaminhe; os *sub-agents* pulam a criação de *issue* do Step 6.
 
@@ -534,7 +525,7 @@ Cada *sub-agent* pula a entrevista interativa (Step 2) e aplica esses padrões p
 | Esclarecimento de quality gates (Step 2 — gates detectados) | Inclua automaticamente todos os *gates* detectados, aplicando a regra do *wrapper* do Step 2, sem perguntar; documente a lista em Assumptions para que o usuário possa revisar e fazer *override* depois. NÃO bloqueie. |
 | Esclarecimento de quality gates (Step 2 — nenhum gate detectado) | Omita a seção `## Quality gates` por inteiro; documente a ausência em Assumptions ("no quality gates detected in the project; section omitted"). NÃO bloqueie. |
 | Criação de issue (Step 6 — flag `create-issue` ausente) | O *orchestrator* já resolveu isso em B.4 (perguntou uma vez e propagou a todos os *sub-agents*). O *sub-agent* trata a ausência aqui como "não criar"; o *orchestrator* só encaminha `create-issue` quando o usuário optou por criar em B.4. NÃO pergunte; NÃO crie em silêncio. |
-| Criação de issue (Step 6 — flag `create-issue` presente, encaminhada pelo orchestrator) | Crie a *issue* conforme o Step 6, sem perguntar. Em caso de falha do `gh`, registre em `Soft-fails` (espelhando a regra do Step 6.5); NÃO bloqueie o sucesso do *sub-agent*. |
+| Criação de issue (Step 6 — flag `create-issue` presente, encaminhada pelo orchestrator) | Crie a *issue* conforme o Step 6, sem perguntar. Em caso de falha do CLI do forge, registre em `Soft-fails` (espelhando a regra do Step 6.5); NÃO bloqueie o sucesso do *sub-agent*. |
 | Falha do hard coverage gate do contrato em Batch Mode | O *sub-agent* falha a *feature* (nenhum arquivo salvo). Reportado ao *orchestrator* como qualquer outra falha (B.6) para que o usuário investigue |
 
 Todas as outras regras do spec-writer (conteúdo *PRD-driven*, aderência aos *codebase patterns*, validação SPEC/PLAN/CONTRACT, nomenclatura *kebab-case*, *file structure*) se aplicam sem alterações.
@@ -568,8 +559,9 @@ Todas as outras regras do spec-writer (conteúdo *PRD-driven*, aderência aos *c
 - Aplique o *hard coverage gate* do contrato antes de salvar: se qualquer AC in-scope tiver zero itens cobrindo, aborte os três arquivos
 - Limite os *Prerequisites* do contrato ao fecho de dependências desta *feature* no `Dependency Graph`: todo recurso declarado (Persistent state, Static inputs, Configuration, Runtime services, External dependencies) é satisfazível pela própria *feature* ou por uma de suas dependências declaradas. Quando um AC in-scope precisa de infraestrutura que só uma *feature* irmã fora do fecho normalmente produziria, aplique o **Preparation Pattern** (declare um *stub*/*override*/*flag* interno da *feature* e exija que esta *feature* o entregue como parte do próprio escopo) em vez de referenciar o estado real da *feature* irmã
 - Aplique o Step 6 (Issue Creation) conforme a lógica de *flag*/pergunta documentada — com a *flag* `create-issue` presente, crie a *issue* sem perguntar; ausente no *single-feature mode* interativo, pergunte uma vez antes de criar; ausente no *Batch Mode*, trate a ausência como "não criar" (o *orchestrator* já resolveu a pergunta em B.4)
-- Detecte *issues* abertas existentes com `gh issue list --search "[F<ID>] in:title" --state open --json number,url --limit 5` antes de criar uma nova — se houver correspondência, pule a criação e reutilize a URL da primeira na saída do spec-writer
-- Trate falhas do `gh` durante o Step 6 como *soft-fails* — registre em `Soft-fails` na saída do spec-writer e continue; os arquivos da *spec* já foram salvos no Step 5 e não devem ser revertidos
+- Resolva o forge (`github` | `gitlab`) conforme `${CLAUDE_PLUGIN_ROOT}/references/forge.md` antes de qualquer operação de *issue*, e use as operações § 3.2 e § 3.3 de lá em vez de embutir comandos de CLI — o pipeline roda tanto em GitHub quanto em GitLab
+- Detecte *issues* abertas existentes (`references/forge.md` § 3.2, com o filtro de título do lado do chamador) antes de criar uma nova — se houver correspondência, pule a criação e reutilize a URL da primeira na saída do spec-writer
+- Trate falhas do CLI do forge durante o Step 6 como *soft-fails* — registre em `Soft-fails` na saída do spec-writer e continue; os arquivos da *spec* já foram salvos no Step 5 e não devem ser revertidos
 
 **Nunca:**
 - Coloque código real na *spec* (descreva apenas a estrutura)

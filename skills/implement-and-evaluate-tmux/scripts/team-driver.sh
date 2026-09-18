@@ -155,9 +155,12 @@ if [ -n "$journal" ] && [ -f "$journal" ]; then
         }
     ' "$journal")"
 
-    # URL do PR, se o journal citar alguma. `|| true` porque o pipefail
-    # propagaria o exit 1 do grep quando não houver match.
-    pr_url="$( { grep -oE 'https://github\.com/[^[:space:]]+/pull/[0-9]+' "$journal" || true; } | tail -n1)"
+    # URL do PR/MR, se o journal citar alguma. Aceita as duas formas de forge:
+    # GitHub `.../pull/<N>` e GitLab `.../-/merge_requests/<N>`, em qualquer host
+    # (GitLab auto-hospedado não usa gitlab.com). O nome do campo continua
+    # `pr_url` — o dashboard.sh e o wave-status-template.md o leem por esse nome.
+    # `|| true` porque o pipefail propagaria o exit 1 do grep quando não houver match.
+    pr_url="$( { grep -oE 'https://[^[:space:]]+/(pull|-/merge_requests)/[0-9]+' "$journal" || true; } | tail -n1)"
 else
     abort_reason="journal-not-found"
 fi

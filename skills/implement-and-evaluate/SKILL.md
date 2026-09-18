@@ -375,9 +375,11 @@ Sub-decisões:
 
 ### Step 7 — PR creation flow (only on `success`)
 
-Disparado exclusivamente quando o Step 6 calculou `success`. Objetivo: abrir um pull request da branch atual da feature para a branch padrão do projeto, com os artefatos de avaliação versionados e a feature integrada ao estado mais recente da branch padrão.
+Disparado exclusivamente quando o Step 6 calculou `success`. Objetivo: abrir um pull request / merge request da branch atual da feature para a branch padrão do projeto, com os artefatos de avaliação versionados e a feature integrada ao estado mais recente da branch padrão.
 
-**7.1 — Safety check.** Determine a branch padrão do projeto via `gh repo view --json defaultBranchRef -q .defaultBranchRef.name` (ex.: `main`). Se a branch atual (`git branch --show-current`) for igual à branch padrão, cancele a criação do PR e finalize com status `success` mais um aviso no chat report: `"Cannot open PR from default branch <main> to itself. Re-invoke from a feature branch if you want a PR."`. O trabalho em si está feito; só o passo do PR é pulado. Nenhum commit de artefatos é feito neste caso.
+**7.0 — Resolver o forge.** Resolva o forge do projeto (`github` | `gitlab`) e faça a pré-checagem do CLI conforme `${CLAUDE_PLUGIN_ROOT}/references/forge.md` (seções 1 e 2) — esse arquivo é canônico para as seis operações de forge deste step; não improvise comandos de CLI. Guarde o forge resolvido em cache para o resto da execução e registre-o em `Overrides applied` no journal, com a origem da resolução (`CLAUDE.md` | `remote` | `default`). Se o CLI estiver ausente ou não autenticado, NÃO aborte: registre o soft-fail com a dica de instalação e siga os steps 7.2 a 7.7 normalmente — os artefatos, o merge e o push valem por si. Só os steps 7.8 e 7.9 são pulados, com o comando manual impresso no chat report.
+
+**7.1 — Safety check.** Determine a branch padrão do projeto conforme a seção 4 de `references/forge.md` (`git symbolic-ref --short refs/remotes/origin/HEAD`, sem o prefixo `origin/`; fallback `git remote show origin`) e guarde em cache. Isso é git puro, não depende do forge. Se a branch atual (`git branch --show-current`) for igual à branch padrão, cancele a criação do PR/MR e finalize com status `success` mais um aviso no chat report: `"Cannot open PR from default branch <main> to itself. Re-invoke from a feature branch if you want a PR."`. O trabalho em si está feito; só o passo do PR/MR é pulado. Nenhum commit de artefatos é feito neste caso. Se os dois comandos falharem e a branch padrão ficar desconhecida, registre soft-fail e siga — sem a comparação, o safety check não tem o que bloquear, e um PR/MR aberto a partir da branch padrão falha depois no 7.9, de novo como soft-fail.
 
 **7.2 — Commit evaluation artifacts.** Antes do merge, versione os artefatos que esta execução produziu. Isso deixa o `prd_progress.json` sem mudanças pendentes (senão o `git merge` do 7.3 pode ser recusado) e garante que os paths citados no corpo do PR existam no PR.
 
@@ -479,15 +481,13 @@ git push -u origin <branch>
 
 Se o push falhar (autenticação negada, remoto recusou, rede), finalize com status `success` mais um aviso no chat report nomeando a falha. Imprima o comando manual explícito que o usuário pode rodar para fazer push: `git push -u origin <branch>`.
 
-**7.8 — Check for an existing PR.**
+**7.8 — Check for an existing PR.** Aplique a operação **"listar PR/MR pela branch de origem"** (`references/forge.md` § 3.4) sobre a branch atual, com o CLI do forge resolvido no 7.0.
 
-```
-gh pr list --head <branch> --json url,number --limit 1
-```
+Se um PR/MR existente for retornado: pule a criação; registre a URL dele no chat report ("Existing PR updated: `<url>`"). O push anterior (Step 7.7) já atualizou o diff do PR/MR e dispara qualquer CI ligada a ele.
 
-Se um PR existente for retornado: pule a criação; registre a URL dele no chat report ("Existing PR updated: `<url>`"). O push anterior (Step 7.7) já atualizou o diff do PR e dispara qualquer CI ligada a ele.
+Se não houver PR/MR existente: prossiga para o 7.9.
 
-Se não houver PR existente: prossiga para o 7.9.
+Se o CLI do forge estiver ausente/não autenticado (7.0) ou a consulta falhar, trate como "não há PR/MR existente" e siga — o 7.9 vai registrar o soft-fail e imprimir o comando manual.
 
 **7.9 — Create the PR.**
 
@@ -496,14 +496,11 @@ Fontes para os placeholders que o orquestrador ainda não tem em memória:
 - **`<Feature Name>`** — derive do nome da pasta da feature. Remova o prefixo `F<ID>-`, troque hífens por espaços e coloque cada palavra com inicial maiúscula. Exemplo: `F03-video-upload` → `Video Upload`. NÃO abra o PRD só para isso.
 - **`<texto literal do AC>` para o checklist de ACs** — leia do **`eval-report-<ts>.md` mais recente** desta execução (o path está no journal). A tabela `## Coverage Manifest` dele tem cada AC in-scope literal na primeira coluna, com uma marca de três estados; como o Step 6 chegou a `success`, toda linha está `✓ verified`. Copie cada célula da primeira coluna como uma linha do checklist. Isso evita re-analisar o PRD ou o contrato.
 - **`<resumo de 2–3 frases>`** — localize o PRD pelo `prd_path` do `prd_progress.json` quando disponível; caso contrário, pela mesma auto-descoberta do `implement-feature` (`docs/PRD.md` → `PRD.md`). Leia a seção da target feature na Seção 6 (`Functional Requirements`) do PRD. Tire as 1–2 primeiras frases do bloco `Capabilities` e, se necessário, uma frase do `Experience`. Corte sem dó — é um resumo de PR, não um spec. Se o PRD não for localizável por qualquer motivo, use uma linha de fallback: `"Implementa F<ID> conforme seu contrato; veja os Acceptance Criteria abaixo."` NÃO bloqueie a criação do PR por causa da leitura do PRD.
-- **`<Closes #N>` (auto-link opcional)** — consulte o GitHub em busca de uma issue de acompanhamento aberta, criada antes pelo `spec-writer`:
-  ```
-  gh issue list --search "[F<ID>] in:title" --state open --json number,url --limit 5
-  ```
+- **`<Closes #N>` (auto-link opcional)** — consulte o forge em busca de uma issue de acompanhamento aberta, criada antes pelo `spec-writer`, com a operação **"listar issue aberta por prefixo de título"** (`references/forge.md` § 3.2), incluindo o filtro de título do lado do chamador que a seção descreve.
   - Nenhuma correspondência → omita a seção `## Closes` inteira do body. É o caso esperado quando o usuário não optou pela criação de issue no spec-writer.
-  - Exatamente uma correspondência → defina `<N>` como o `number` dessa issue e inclua a seção `## Closes`.
-  - Várias correspondências → use o `number` do **primeiro** resultado, registre um soft-fail no chat report nomeando todas as URLs de issue encontradas (para que o usuário consolide manualmente) e inclua a seção `## Closes` com a primeira.
-  - Falha do `gh` → omita a seção `## Closes`, registre um soft-fail no chat report e continue. A criação do PR nunca é bloqueada pela busca de issue.
+  - Exatamente uma correspondência → defina `<N>` como o número dessa issue (`number` no GitHub, `iid` no GitLab — nunca o `id` do GitLab) e inclua a seção `## Closes`.
+  - Várias correspondências → use o número do **primeiro** resultado, registre um soft-fail no chat report nomeando todas as URLs de issue encontradas (para que o usuário consolide manualmente) e inclua a seção `## Closes` com a primeira.
+  - Falha do CLI do forge (ou CLI ausente) → omita a seção `## Closes`, registre um soft-fail no chat report e continue. A criação do PR/MR nunca é bloqueada pela busca de issue.
 
 Monte o título:
 ```
@@ -553,24 +550,17 @@ Closes #<N>
 🤖 Gerado automaticamente. Cada acceptance criterion acima foi exercitado ponta a ponta contra o contrato.
 ````
 
-A seção `## Closes` do template acima é **condicional**: emita o header da seção E a linha `Closes #<N>` apenas quando a busca `gh issue list` encontrou ao menos uma issue aberta. Quando a busca não encontrou nada (ou o `gh` falhou), remova o bloco `## Closes` inteiro do body — NÃO emita uma seção vazia.
+A seção `## Closes` do template acima é **condicional**: emita o header da seção E a linha `Closes #<N>` apenas quando a busca de issue encontrou ao menos uma issue aberta. Quando a busca não encontrou nada (ou o CLI do forge falhou), remova o bloco `## Closes` inteiro do body — NÃO emita uma seção vazia. A palavra-chave `Closes #<N>` fecha a issue no merge nos dois forges.
 
-Invoque:
+Invoque a operação **"criar PR/MR"** (`references/forge.md` § 3.5) com o título e o body montados acima. No GitLab, a branch de origem e a branch de destino (a branch padrão resolvida no 7.1) são explícitas no comando.
 
-```
-gh pr create --title "<title>" --body "$(cat <<'EOF'
-<conteúdo do body acima>
-EOF
-)"
-```
-
-Capture a URL do PR retornada. Se o `gh pr create` falhar, finalize com status `success` mais um aviso no chat report nomeando a falha e o comando manual para tentar de novo.
+Capture a URL do PR/MR retornada. Se a criação falhar — inclusive quando o CLI está ausente ou não autenticado —, finalize com status `success` mais um aviso no chat report nomeando a falha e o comando manual completo para tentar de novo.
 
 ### Step 8 — Finalize
 
 1. **`keep env` no último evaluator (se o usuário pediu E o status final não for `success`)** — re-invoque o evaluator mais uma vez com `keep env` acrescentado ao input, para que o usuário tenha um ambiente vivo para inspecionar. Registre essa re-invocação no journal como uma entrada especial "post-finalize"; o status dela é apenas informativo (não muda o status final do orquestrador).
 
-2. **Grave o bloco final do journal** (e atualize a linha `**Status:**` do header) com: status final, total de ciclos, total de commits entre os ciclos (soma dos commits de fase + commits de fix), paths de todos os eval-reports produzidos (um por invocação do evaluator), itens failed/blocked restantes, soft-fails do journal e a linha **Pull request**: `PR not opened: <motivo>` (quando bloqueado ou pulado por branch padrão, falha de commit, falha de push, falha do `gh` ou status diferente de `success`). Quando o Step 7.6 já gravou o Final Verdict, não o regrave.
+2. **Grave o bloco final do journal** (e atualize a linha `**Status:**` do header) com: status final, total de ciclos, total de commits entre os ciclos (soma dos commits de fase + commits de fix), paths de todos os eval-reports produzidos (um por invocação do evaluator), itens failed/blocked restantes, soft-fails do journal e a linha **Pull request**: `PR not opened: <motivo>` (quando bloqueado ou pulado por branch padrão, falha de commit, falha de push, falha do CLI do forge ou status diferente de `success`). Quando o Step 7.6 já gravou o Final Verdict, não o regrave.
 
 3. **Grave o `prd_progress.json`** conforme **PROGRESS TRACKING**, de acordo com o status final.
 
@@ -708,10 +698,11 @@ A anotação do orquestrador serve à clareza forense do JSON. O journal em `<fe
 - Respeite exatamente os overrides de nível de orquestrador (`max N retries`, `no retries`, `unlimited retries`, `pause between cycles`, `keep eval env`, `progress-path=<path>`) e repasse todo o resto ao prompt do implementador no ciclo 0.
 - Libere o lockfile em qualquer caminho de término, incluindo aborts.
 - Repasse `progress-path=<path>` a todo prompt de subagente de sub-skill quando o receber como input, para que `implement-feature`, `evaluator` e `fix-runner` gravem no mesmo `prd_progress.json`. Grave `status="fail"` + `failure_reason` de nível de orquestrador conforme **PROGRESS TRACKING** no Step 8 nos casos `exhausted` / `stuck` / `aborted`; grave `status="pr-blocked"` + `failure_reason` no caso `pr-blocked`.
-- Quando o Step 6 calcular `success`, rode o Step 7 (fluxo de criação do PR): verifique que a branch atual não é a branch padrão, commite os artefatos de avaliação desta execução, faça fetch + merge de `origin/<default>`, resolva o conflito do `prd_progress.json` e despache o `fix-runner` Mode B para os demais conflitos, reavalie depois do merge, finalize o journal e commite os artefatos restantes, faça push da branch e então `gh pr create` com o título canônico (`feat(F<ID>): <Feature Name>`) e o template de body documentado no Step 7. Pule o Step 7 de forma limpa (aviso no chat report, status continua `success`) quando a branch for a branch padrão, um commit de artefatos falhar, o push falhar ou o `gh pr create` falhar — o trabalho está feito; só o passo de anúncio não pôde ser concluído.
+- Quando o Step 6 calcular `success`, rode o Step 7 (fluxo de criação do PR): verifique que a branch atual não é a branch padrão, commite os artefatos de avaliação desta execução, faça fetch + merge de `origin/<default>`, resolva o conflito do `prd_progress.json` e despache o `fix-runner` Mode B para os demais conflitos, reavalie depois do merge, finalize o journal e commite os artefatos restantes, faça push da branch e então abra o PR/MR pelo forge resolvido, com o título canônico (`feat(F<ID>): <Feature Name>`) e o template de body documentado no Step 7. Pule o Step 7 de forma limpa (aviso no chat report, status continua `success`) quando a branch for a branch padrão, um commit de artefatos falhar, o push falhar ou a criação do PR/MR falhar — o trabalho está feito; só o passo de anúncio não pôde ser concluído.
 - Nos commits de artefatos (Steps 7.2, 7.6 e 8.4), faça stage por path explícito apenas dos eval-reports e das pastas `eval-screenshots-<ts>/` desta execução, do journal desta execução e do `prd_progress.json`.
-- Detecte PRs existentes via `gh pr list --head <branch>` antes do `gh pr create`; se houver, apenas faça push e reporte a URL existente.
-- Busque a issue aberta `[F<ID>]` correspondente (criada pelo `spec-writer`) via `gh issue list --search "[F<ID>] in:title" --state open --json number,url --limit 5` imediatamente antes de compor o body do PR no Step 7.9. Quando houver correspondência, injete `## Closes\n\nCloses #<N>` no body para que o GitHub feche a issue automaticamente no merge; quando não houver ou o `gh` falhar, omita a seção inteira e continue.
+- Resolva o forge (`github` | `gitlab`) uma única vez, no Step 7.0, conforme `${CLAUDE_PLUGIN_ROOT}/references/forge.md`. Esse arquivo é canônico para as seis operações de forge; nunca embuta comandos de CLI aqui nem assuma `gh`. CLI ausente ou não autenticado é soft-fail (o abort preventivo existe só no `implement-and-evaluate-tmux`, Step 2.4).
+- Detecte PRs/MRs existentes pela branch de origem (`references/forge.md` § 3.4) antes de criar; se houver, apenas faça push e reporte a URL existente.
+- Busque a issue aberta `[F<ID>]` correspondente (criada pelo `spec-writer`) conforme `references/forge.md` § 3.2 imediatamente antes de compor o body do PR/MR no Step 7.9. Quando houver correspondência, injete `## Closes\n\nCloses #<N>` no body para que o forge feche a issue automaticamente no merge; quando não houver ou o CLI falhar, omita a seção inteira e continue.
 
 **Nunca:**
 

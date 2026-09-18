@@ -33,6 +33,23 @@ Pastas de feature seguem `docs/F01-nome-da-feature/`, com o ID vindo do PRD do p
 Os `eval-report-*.md` e os `orchestration-*.md` são histórico imutável com timestamp:
 nunca são editados à mão nem sobrescritos, e cada execução gera um arquivo novo.
 
+## Forge
+
+<!-- Onde este projeto hospeda issues e pull/merge requests. Deixe descomentada
+     apenas a linha que vale. O pipeline detecta sozinho pelo `git remote` quando
+     o host é `github.com` ou tem `gitlab` no nome; esta linha existe para vencer
+     a detecção — e é obrigatória em GitLab auto-hospedado num host que não se
+     chama `gitlab.*` (é o caso da maioria das instalações corporativas). -->
+
+- Forge: github
+<!-- - Forge: gitlab -->
+
+O CLI correspondente precisa estar instalado e autenticado para que a criação de
+issue e de PR/MR funcione: `gh` para GitHub, `glab` para GitLab. Sem ele, o
+pipeline não trava — ele faz todo o trabalho, salva os arquivos, commita e
+imprime o comando manual do que faltou. A exceção é o `implement-and-evaluate-tmux`,
+que checa o CLI antes de despachar a wave e aborta na largada.
+
 ## Ordem de trabalho
 
 O pipeline é encadeado: cada etapa lê a anterior em vez de reperguntar o que já

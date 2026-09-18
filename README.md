@@ -17,8 +17,8 @@ Os documentos são gerados em português (pt-BR).
 ```
 
 Depois de instalar, copie o `templates/CLAUDE.example.md` para a raiz do seu projeto como
-`CLAUDE.md` e preencha a stack e os caminhos — é isso que faz as skills gerarem
-documentos aderentes ao projeto em vez de genéricos.
+`CLAUDE.md` e preencha a stack, os caminhos e a seção **Forge** — é isso que faz as
+skills gerarem documentos aderentes ao projeto em vez de genéricos.
 
 ## O que vem dentro
 
@@ -97,6 +97,54 @@ Rodam sozinhos, sem invocação. Ficam em silêncio quando não têm nada a dize
 Os dois primeiros são hooks de comando (bash + python3, sem dependências externas);
 o terceiro é um hook `prompt`, avaliado por um modelo. Exigem apenas `bash` e `python3`
 no PATH — se `python3` faltar, os scripts saem em silêncio em vez de quebrar a sessão.
+
+## Forge: GitHub ou GitLab
+
+O pipeline abre issues e pull/merge requests, e funciona nos dois. A plataforma
+(o *forge*) é resolvida **uma vez por execução**, nesta ordem:
+
+1. **A linha `- Forge: github|gitlab` no `CLAUDE.md` do seu projeto.** Vence tudo.
+2. **Auto-detecção pelo `git remote get-url origin`** — `github.com` → GitHub;
+   `gitlab.com` ou host cujo primeiro rótulo é `gitlab` (ex.: `gitlab.tray.net.br`)
+   → GitLab.
+3. **Sem remote ou host não reconhecido** → assume GitHub e registra um soft-fail
+   dizendo como declarar o contrário.
+
+GitLab auto-hospedado num host que não se chama `gitlab.*` **não é detectável** —
+é para isso que existe a linha no `CLAUDE.md`. Como cada projeto carrega o seu,
+trocar de projeto não exige mexer no plugin:
+
+```markdown
+## Forge
+- Forge: github
+<!-- - Forge: gitlab -->
+```
+
+**Pré-requisito de CLI.** As operações de forge usam `gh` (GitHub) ou `glab`
+(GitLab), instalado e autenticado:
+
+| Forge | CLI | Instalação | Autenticação |
+|---|---|---|---|
+| GitHub | `gh` | <https://github.com/cli/cli#installation> | `gh auth login` |
+| GitLab | `glab` | <https://gitlab.com/gitlab-org/cli#installation> | `glab auth login` |
+
+**Sem o CLI, nada se perde.** Implementação, avaliação, correção e commits não
+dependem de forge nenhum. Quando o CLI falta ou não está autenticado, o pipeline
+faz o trabalho inteiro, salva os arquivos, commita, e imprime no relatório o
+comando manual do que ficou faltando (abrir a issue, abrir o PR/MR). A única
+exceção é o `implement-and-evaluate-tmux`, que checa o CLI no Step 2.4 e aborta a
+wave antes de despachar — falhar na largada custa menos que descobrir depois de
+30 minutos de ciclos que nenhuma equipe consegue abrir MR.
+
+O mapeamento completo — as seis operações usadas, o comando de cada forge, os
+nomes de campo que divergem (`body` ⇄ `description`, `OPEN` ⇄ `opened`) e os
+literais de schema que **não** mudam — vive em `references/forge.md`, na raiz do
+plugin. É a fonte canônica; as skills apontam para lá em vez de embutir comandos.
+
+> **Os comandos `glab` ainda não foram validados contra um binário local.** Foram
+> escritos a partir da documentação oficial. Flags do `glab` variam entre versões;
+> confirme com `glab <comando> --help` na primeira execução real. Um flag errado
+> degrada para o soft-fail normal — "abra o MR à mão" —, nunca para trabalho perdido.
 
 ## Desenvolvimento local
 

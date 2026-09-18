@@ -47,7 +47,7 @@ feature=F03 eval-report=docs/F03-video-upload/eval-report-2026-05-01T15-02-10Z.m
 ### Campos do Mode B
 
 - **feature** — mesma resolução do Mode A.
-- **pr** (opcional, mutuamente exclusivo com `conflicted-files`) — `<URL|número|nome-da-branch>`. Quando presente, a skill busca os metadados do PR via `gh pr view`, exige que a branch atual seja igual à head ref do PR, executa `git merge` da base ref do PR na branch atual e resolve os conflitos que aparecerem. O título e o body do PR são mantidos como contexto para a resolução.
+- **pr** (opcional, mutuamente exclusivo com `conflicted-files`) — `<URL|número|nome-da-branch>`. Quando presente, a skill busca os metadados do PR/MR pelo CLI do forge do projeto (veja `${CLAUDE_PLUGIN_ROOT}/references/forge.md` § 3.6), exige que a branch atual seja igual à branch de origem do PR/MR, executa `git merge` da branch de destino na branch atual e resolve os conflitos que aparecerem. O título e o corpo do PR/MR são mantidos como contexto para a resolução.
 - **conflicted-files** (opcional, mutuamente exclusivo com `pr`; obrigatório quando `pr` está ausente) — lista de paths separados por vírgula ou espaço que contêm marcadores `<<<<<<<` / `=======` / `>>>>>>>`. Tipicamente obtida via `git diff --name-only --diff-filter=U`.
 - **cycle**, **progress-path** — iguais ao Mode A.
 
@@ -229,10 +229,10 @@ Quando o Step 1 detectar o Mode B, siga este fluxo em vez dos Steps 2–7.
 
 **Inicie o merge, se necessário.** Quando `pr=<ref>` foi informado:
 
-1. Busque os metadados do PR via `gh pr view <ref> --json baseRefName,headRefName,state,title,body,url`. Aborte se o `gh` não estiver autenticado, se o PR não existir ou se seu estado não for `OPEN`.
-2. Verifique se a branch atual é igual ao `headRefName` do PR. Se não for, aborte com `"PR head is <X>; current branch is <Y> — refusing to switch branches"`.
+1. Resolva o forge do projeto (`github` | `gitlab`) conforme `${CLAUDE_PLUGIN_ROOT}/references/forge.md` (seções 1 e 2) e busque os metadados do PR/MR com a operação **"ver metadados de um PR/MR"** (§ 3.6), usando o mapeamento de campos de lá — o corpo é `body` no GitHub e `description` no GitLab. Aborte se o CLI do forge estiver ausente ou não autenticado, se o PR/MR não existir ou se o estado dele não for aberto (`OPEN` no GitHub, `opened` no GitLab — aceite os dois literais).
+2. Verifique se a branch atual é igual à **branch de origem** do PR/MR (`headRefName` no GitHub, `source_branch` no GitLab). Se não for, aborte com `"PR head is <X>; current branch is <Y> — refusing to switch branches"`.
 3. Verifique se a working tree está limpa. A checagem considera **apenas arquivos versionados** (arquivos não versionados, como `eval-report-*.md` e `eval-screenshots-*/`, não contam) e **ignora o `prd_progress.json`** (que esta própria skill acabou de alterar ao incrementar `cycles`). Se houver qualquer outra mudança em arquivo versionado, aborte listando os paths no motivo.
-4. `git fetch origin <baseRefName>` e `git merge origin/<baseRefName>`.
+4. `git fetch origin <branch-de-destino>` e `git merge origin/<branch-de-destino>` (`baseRefName` no GitHub, `target_branch` no GitLab).
 5. Se o merge terminou limpo (sem marcadores na working tree), pule direto para **Commit** com a variante limpa.
 
 Quando `conflicted-files=<lista>` foi informado, verifique que `.git/MERGE_HEAD` existe e que todo path do input está atualmente em `git diff --name-only --diff-filter=U`. Se o estado do merge não bater, aborte descrevendo a inconsistência.

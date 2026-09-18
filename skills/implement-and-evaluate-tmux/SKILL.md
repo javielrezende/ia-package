@@ -210,7 +210,12 @@ Se o override `no foundation serialization` foi passado, defina `foundation_sele
 - Se o usuário aceitar → `git branch -D feat/F<ID>-<slug>`.
 - Qualquer outra resposta → aborte a wave inteira.
 
-**2.4 — Pré-checagem do `gh`.** Primeiro, o binário: `command -v gh >/dev/null 2>&1`. Se ausente, aborte: `"gh CLI não instalado; a criação de PR depende dele. Instale e re-rode."`. Depois, `gh auth status`. Se não autenticado, aborte: `"gh CLI não autenticado; a criação de PR vai falhar. Rode 'gh auth login' e re-rode."`. É mais barato falhar aqui do que depois de 30min de ciclos.
+**2.4 — Resolver o forge e pré-checar o CLI.** Primeiro resolva o forge do projeto (`github` | `gitlab`) conforme `${CLAUDE_PLUGIN_ROOT}/references/forge.md` (seção 1) e guarde em cache para o resto da execução — esse arquivo é canônico para as operações de forge; não improvise comandos de CLI. Só então pré-cheque o CLI **daquele** forge (seção 2): primeiro o binário (`command -v gh` ou `command -v glab`), depois a autenticação (`gh auth status` ou `glab auth status`).
+
+Esta é a **única** pré-checagem de forge que aborta em todo o plugin, e o abort é deliberado: descobrir no fim de 30min de ciclos que nenhuma equipe consegue abrir PR/MR custa muito mais do que falhar na largada. Em todo o resto do pipeline, CLI ausente é soft-fail.
+
+- Binário ausente → aborte a wave nomeando o CLI e como instalar: `"CLI <gh|glab> não instalado; a criação de PR/MR depende dele. Instale (<link da seção 2 de forge.md>) e re-rode."`.
+- Não autenticado → aborte a wave: `"CLI <gh|glab> não autenticado; a criação de PR/MR vai falhar. Rode '<gh|glab> auth login' e re-rode."`.
 
 ### Step 3 — Inicializar os artefatos da wave
 
@@ -251,7 +256,7 @@ Dê permissão de execução a todos (`chmod +x`). A skill os distribui já com 
 git worktree add -b feat/F<ID>-<slug> .claude/worktrees/F<ID>-<slug> <default-branch>
 ```
 
-Descubra a branch padrão com `gh repo view --json defaultBranchRef -q .defaultBranchRef.name` e guarde em cache para o resto da execução.
+Descubra a branch padrão conforme a seção 4 de `${CLAUDE_PLUGIN_ROOT}/references/forge.md` (`git symbolic-ref --short refs/remotes/origin/HEAD`, sem o prefixo `origin/`; fallback `git remote show origin`) e guarde em cache para o resto da execução. Isso é git puro e não depende do forge. Se os dois comandos falharem, aborte a wave — sem branch padrão não há base de onde criar as worktrees.
 
 **4.2 — Crie a sessão tmux e a janela do dashboard**:
 
@@ -434,7 +439,7 @@ Faça a escrita atômica do arquivo mesclado (read-modify-write do arquivo intei
 Se um journal estiver ausente ou não parseável em qualquer um dos regimes, registre um soft-fail e pule o reconcile daquela equipe (o arquivo mantém o estado anterior).
 
 **7.2 — Limpeza das worktrees**:
-- Para cada equipe com `status=success`: apague a worktree, salvo `keep worktrees`, com `git worktree remove --force .claude/worktrees/F<ID>-<slug>`. O `--force` é necessário porque a worktree carrega arquivos não rastreados que nenhum commit recolheu (logs de serviço, `.pids/`, tmpdirs do evaluator). A branch e o PR permanecem no GitHub.
+- Para cada equipe com `status=success`: apague a worktree, salvo `keep worktrees`, com `git worktree remove --force .claude/worktrees/F<ID>-<slug>`. O `--force` é necessário porque a worktree carrega arquivos não rastreados que nenhum commit recolheu (logs de serviço, `.pids/`, tmpdirs do evaluator). A branch e o PR/MR permanecem no forge.
 - Para cada equipe com status diferente de `success`: preserve a worktree e a janela tmux, salvo `clean worktrees` (e mesmo assim, NUNCA para equipes em `timeout`).
 
 **7.3 — Grave o `wave-status.md`** em `.claude/worktrees/.wave-<run-id>/wave-status.md` conforme `references/wave-status-template.md`.
@@ -554,14 +559,15 @@ Nos dois regimes, o `wave-status.md` é o retrato canônico de nível de wave (s
 - **Worktree existe de uma execução anterior** → prompt interativo (Step 2.3). Se o usuário recusar, aborte a wave inteira.
 - **`scripts/stop.sh` não existe na worktree órfã** → pule em silêncio. O `git worktree remove --force` é o que de fato libera o path.
 - **`stop.sh --clean` falha dentro de uma worktree obsoleta** → engula o erro, registre soft-fail; o `--force` resolve o path de qualquer jeito.
-- **`gh` não instalado ou não autenticado** → aborte de saída no Step 2.4. Sem isso, a criação de PR falharia no fim de toda equipe.
+- **CLI do forge (`gh` ou `glab`) não instalado ou não autenticado** → aborte de saída no Step 2.4. Sem isso, a criação de PR/MR falharia no fim de toda equipe. É a única pré-checagem de forge que aborta no plugin; veja `references/forge.md` § 2.
+- **Forge não detectável** (sem remote, ou GitLab auto-hospedado em host sem `gitlab` no nome) → o Step 2.4 assume `github` e registra soft-fail. Se o projeto for GitLab, a wave inteira vai pré-checar o CLI errado e abortar. A saída é declarar `- Forge: gitlab` no `CLAUDE.md` do projeto (`references/forge.md` § 1).
 - **`git worktree add` falha** (branch já existe, mudanças não commitadas) → aborte com o erro do git; limpe as worktrees já criadas nesta execução.
 - **O `/implement-and-evaluate` de uma equipe aborta pré-fase** (dependência ausente, contrato vazio) → o Final Verdict do journal dela captura isso; o status file recebe `status=aborted`. As outras equipes continuam.
 - **Timeout de relógio de parede dispara** → mate a janela tmux da equipe; grave `status=timeout`; worktree preservada. As outras continuam.
 - **Todas as equipes dão timeout** → o relatório mostra N timeouts. Status da wave = `all-failed`. O usuário investiga cada worktree.
 - **`permission-mode=auto` indisponível na sessão** (plano ou `permissions.disableAutoMode`) → a equipe cai em prompt e fica parada até o timeout. Sintoma: `running` no dashboard com o ciclo sem avançar. Veja **PERMISSÕES** para a saída.
 - **O processo claude de uma equipe morre sem gravar o Final Verdict** → o status file fica em `status=running` (o driver não chegou a escrever o terminal). A Main trata como `timeout` quando o relógio estoura; registre `crashed-without-status` nos soft-fails.
-- **Colisão de PR: PRs de duas equipes tocam os mesmos arquivos** → não é problema desta skill. Cada `/implement-and-evaluate` resolve seus conflitos no Step 7 dele. Se o usuário mergear os dois PRs em sequência, o GitHub cuida do merge humano do segundo.
+- **Colisão de PR: PRs de duas equipes tocam os mesmos arquivos** → não é problema desta skill. Cada `/implement-and-evaluate` resolve seus conflitos no Step 7 dele. Se o usuário mergear os dois PRs/MRs em sequência, o próprio forge cuida do merge humano do segundo.
 - **Ctrl-C / SIGTERM na Main** → as equipes continuam no tmux. Nenhum relatório consolidado é emitido. O usuário pode `tmux attach -t iaet-<wave-tag>-<run-id>`. A sessão foi criada destacada (`new-session -d`) precisamente para sobreviver à Main.
 - **`max-parallel=1`** → wave totalmente serial; ainda assim roda em worktrees + tmux pelo isolamento.
 - **`max-parallel=N` maior que o número de features** → sem throttling; todas as do bloco paralelo sobem de uma vez. Tudo bem.
@@ -588,3 +594,4 @@ Nos dois regimes, o `wave-status.md` é o retrato canônico de nível de wave (s
 
 **`references/`** — documentos só de leitura que o orquestrador consulta e nunca executa:
 - `references/wave-status-template.md` — formato fixado do `wave-status.md` E do relatório consolidado no chat.
+- `${CLAUDE_PLUGIN_ROOT}/references/forge.md` (raiz do plugin) — canônico para a resolução do forge, a pré-checagem de CLI e as seis operações de GitHub/GitLab usadas pelo pipeline.

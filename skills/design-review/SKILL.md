@@ -35,7 +35,7 @@ Overrides opcionais em linguagem natural, em qualquer lugar do input:
 Se a resolução falhar:
 
 - Nenhuma pasta de feature e nenhum `url=` → aborte pedindo um dos dois.
-- Pasta resolvida cujo `contract.md` **não tem seção `## UI` nem `## E2E`** → aborte: `feature <ID> declares no UI surface; design-review has nothing to look at`. A skill não inventa telas para revisar.
+- Pasta resolvida cujo `contract.md` **não tem seção `## UI` nem `## E2E`** → aborte: `a feature <ID> não declara nenhuma superfície de UI; o design-review não tem o que olhar`. A skill não inventa telas para revisar.
 - Nenhuma rota descoberta e nenhum `routes=` → aborte listando onde procurou.
 
 ## OUTPUT

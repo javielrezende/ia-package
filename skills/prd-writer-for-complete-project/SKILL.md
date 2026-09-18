@@ -801,7 +801,7 @@ Escreva o JSON em `{PROGRESS_PATH}.tmp` e depois renomeie para `{PROGRESS_PATH}`
 
 **`OUTPUT_FOLDER` não existe:**
 - Se não souber a pasta de saída, pergunte
-- Tente `mkdir -p {OUTPUT_FOLDER}`; se falhar, retorne "Cannot create output folder: {OUTPUT_FOLDER}"
+- Tente `mkdir -p {OUTPUT_FOLDER}`; se falhar, retorne "Não foi possível criar a pasta de saída: {OUTPUT_FOLDER}"
 
 **`PROJECT_NAME` com caracteres especiais:**
 - Sanitize para o nome do arquivo (espaços por hífens, remova especiais); mantenha o nome original no H1

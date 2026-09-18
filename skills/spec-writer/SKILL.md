@@ -39,11 +39,11 @@ Aceite *free-form input* do usuário. O usuário pode referenciar a *feature* po
 
 **Flag opcional:** o *input* pode incluir `create-issue` (em qualquer posição). Quando presente, a *skill* cria uma *issue* de acompanhamento no forge do projeto (GitHub ou GitLab, resolvido conforme `${CLAUDE_PLUGIN_ROOT}/references/forge.md`) para a *feature* no Step 6, sem perguntar. Quando ausente no *single-feature mode*, o Step 6 pergunta `y/n` ao usuário antes de criar; quando ausente no *Batch Mode*, o *plan* consolidado do *orchestrator* (B.4) pergunta uma única vez e a resposta vale para todas as *features* do *batch*. Veja o **Step 6** para o fluxo de criação da *issue* e o **Batch Mode** para a interação em *batch*.
 
-**PRD é obrigatório.** Se nenhum *PRD* for encontrado no projeto, pare e instrua o usuário a gerar um primeiro com a *skill* `prd-writer`. Não faça *fallback* para uma entrevista não estruturada.
+**PRD é obrigatório.** Se nenhum *PRD* for encontrado no projeto, pare e instrua o usuário a gerar um primeiro com a *skill* `prd-writer-for-complete-project`. Não faça *fallback* para uma entrevista não estruturada.
 
 **1.2: Checar dependency readiness e Foundation features (greenfield)**
 
-Leia a tabela `Dependency Graph` do *PRD* (em `Appendix A: Implementation Planning`; em PRDs antigos, Seção 8). Para cada *feature* na coluna `Dependencies` da *target feature*, verifique se ela parece estar implementada na *codebase* (se existem arquivos fonte correspondentes ao *scope* da *feature*). Se alguma dependência ainda não estiver implementada, avise o usuário: "F<X> depends on F<Y> (not yet implemented). Continue anyway?". Prossiga apenas se confirmado.
+Leia a tabela `Dependency Graph` do *PRD* (em `Appendix A: Implementation Planning`; em PRDs antigos, Seção 8). Para cada *feature* na coluna `Dependencies` da *target feature*, verifique se ela parece estar implementada na *codebase* (se existem arquivos fonte correspondentes ao *scope* da *feature*). Se alguma dependência ainda não estiver implementada, avise o usuário: "F<X> depende de F<Y> (ainda não implementada). Continuar mesmo assim?". Prossiga apenas se confirmado.
 
 Se o *PRD* contiver uma subseção **Foundation Features** (em `Appendix A`; em PRDs antigos, Seção 8), aplique estas verificações adicionais baseadas no estado de implementação de cada *Foundation feature*:
 
@@ -52,11 +52,11 @@ Se o *PRD* contiver uma subseção **Foundation Features** (em `Appendix A`; em 
   - **Partial Foundation** = algumas *Foundation features* estão implementadas, outras ainda estão pendentes.
   - **Foundation complete** = todas as *Foundation features* estão implementadas.
 - **Scenario 1 — greenfield + target feature É uma Foundation feature:** prossiga sem aviso extra. Este é o caminho esperado para um projeto *greenfield*.
-- **Scenario 2 — greenfield + target feature NÃO está em Foundation Features:** avise o usuário: "This appears to be a greenfield project (no Foundation feature is implemented yet). F<target> is not a Foundation feature. Foundation features (F<ID>, ...) set up the shared infrastructure and should be implemented first. Recommend starting with F<first-foundation>. Continue with F<target> anyway?". Prossiga apenas se confirmado.
-- **Scenario 3 — Partial Foundation (algumas Foundation features implementadas, outras pendentes) e a target não é um dos Foundations restantes:** liste as *Foundation features* pendentes e avise: "Foundation features F<ID1>, F<ID2>... are not yet implemented. Implementing F<target> before these may create file conflicts in the scaffolding. Continue anyway?". Prossiga apenas se confirmado.
+- **Scenario 2 — greenfield + target feature NÃO está em Foundation Features:** avise o usuário: "Este parece ser um projeto greenfield (nenhuma Foundation feature implementada ainda). F<target> não é uma Foundation feature. As Foundation features (F<ID>, ...) montam a infraestrutura compartilhada e deveriam vir primeiro. Recomendo começar por F<first-foundation>. Continuar com F<target> mesmo assim?". Prossiga apenas se confirmado.
+- **Scenario 3 — Partial Foundation (algumas Foundation features implementadas, outras pendentes) e a target não é um dos Foundations restantes:** liste as *Foundation features* pendentes e avise: "As Foundation features F<ID1>, F<ID2>... ainda não estão implementadas. Implementar F<target> antes delas pode criar conflitos de arquivo no scaffolding. Continuar mesmo assim?". Prossiga apenas se confirmado.
 - **Foundation complete (codebase madura para fins de Foundation):** pule todas as verificações específicas de *Foundation*. O *dependency readiness check* normal acima é suficiente.
 
-**Nota sobre Batch Mode:** Em *Batch Mode*, o *orchestrator* executa essas verificações de dependência e *Foundation* uma vez em todo o *batch* (B.2 e B.3) e filtra as *features* antes do *dispatch*. Os *sub-agents* ignoram todo *prompt* de "avise o usuário / Continue anyway?" neste passo — assuma que a verificação já foi resolvida pelo *orchestrator* e prossiga.
+**Nota sobre Batch Mode:** Em *Batch Mode*, o *orchestrator* executa essas verificações de dependência e *Foundation* uma vez em todo o *batch* (B.2 e B.3) e filtra as *features* antes do *dispatch*. Os *sub-agents* ignoram todo *prompt* de "avise o usuário / Continuar mesmo assim?" neste passo — assuma que a verificação já foi resolvida pelo *orchestrator* e prossiga.
 
 **1.3: Codebase Pattern Discovery (duas layers)**
 
@@ -124,7 +124,7 @@ Preciso esclarecer algumas decisões técnicas que o PRD e a codebase ainda não
 
 ### Step 2: Interview (Entrevista)
 
-**Batch Mode override:** Em *Batch Mode*, este passo inteiro é substituído pela *Auto-Accept Policy* (veja a seção Batch Mode). Os *sub-agents* pulam o Step 2 e prosseguem diretamente para o Step 3 com os padrões do *Auto-Accept* aplicados. Toda instrução de "ask the user" abaixo se torna "apply the Auto-Accept default and document the choice in the spec's assumptions".
+**Batch Mode override:** Em *Batch Mode*, este passo inteiro é substituído pela *Auto-Accept Policy* (veja a seção Batch Mode). Os *sub-agents* pulam o Step 2 e prosseguem diretamente para o Step 3 com os padrões do *Auto-Accept* aplicados. Toda instrução de "pergunte ao usuário" abaixo se torna "aplique o default da *Auto-Accept* e documente a escolha nas *assumptions* da *spec*".
 
 Entreviste o usuário incansavelmente sobre cada aspecto deste plano até chegarmos a um entendimento compartilhado. Percorra cada ramo da árvore de design, resolvendo as dependências entre decisões uma a uma. Para cada pergunta, forneça sua resposta recomendada.
 
@@ -132,9 +132,9 @@ Faça as perguntas uma de cada vez.
 
 Se uma pergunta puder ser respondida explorando a *codebase* ou lendo o *PRD*, explore ou leia em vez de perguntar.
 
-**Pergunta de Scope (faça primeiro, quando aplicável):** Se a *feature* tem ambos os blocos `Core Scope` e `Full Scope additions` no *PRD*, pergunte: "Should the spec cover Core Scope only, or Core + Full Scope additions?". Se apenas um dos blocos estiver presente, ou nenhum estiver presente, pule esta pergunta e assuma o *scope* completo da *feature*.
+**Pergunta de Scope (faça primeiro, quando aplicável):** Se a *feature* tem ambos os blocos `Core Scope` e `Full Scope additions` no *PRD*, pergunte: "A spec deve cobrir apenas o `Core Scope`, ou `Core Scope` + `Full Scope additions`?". Se apenas um dos blocos estiver presente, ou nenhum estiver presente, pule esta pergunta e assuma o *scope* completo da *feature*.
 
-**Esclarecimento de quality gates (faça em segundo, depois da pergunta de scope):** Detecte os *quality gates* do projeto a partir do contexto já ao seu alcance (o *harness* injetou o `CLAUDE.md` e a documentação do projeto; *manifests* como `package.json`, `Makefile`, `Taskfile`, `justfile`, `pyproject.toml` etc. podem ser lidos). Antes de montar a lista, verifique na *codebase* e nas *skills* disponíveis se existe um *script wrapper* que execute todos os *gates* de uma vez; quando existir, proponha o *wrapper* como *gate* no lugar dos *scripts* individuais que ele já executa. Apresente a lista detectada ao usuário: "I detected these quality gates from the project — confirm or edit the list before I write `## Quality gates` into the contract." Cada entrada detectada deve ter um nome, o comando literal a executar e uma descrição de uma linha do que significa passar. Aceite as edições do usuário (inclusões, remoções, reordenações, correções de comando, reescrita de descrições) antes de continuar. Se você não encontrar nenhum *gate*, pergunte: "I did not detect quality gates in this project. Skip the `## Quality gates` section in the contract?" — o usuário pode recusar (nesse caso, peça que ele dite os *gates*) ou aceitar (a seção é omitida por inteiro do contrato gerado).
+**Esclarecimento de quality gates (faça em segundo, depois da pergunta de scope):** Detecte os *quality gates* do projeto a partir do contexto já ao seu alcance (o *harness* injetou o `CLAUDE.md` e a documentação do projeto; *manifests* como `package.json`, `Makefile`, `Taskfile`, `justfile`, `pyproject.toml` etc. podem ser lidos). Antes de montar a lista, verifique na *codebase* e nas *skills* disponíveis se existe um *script wrapper* que execute todos os *gates* de uma vez; quando existir, proponha o *wrapper* como *gate* no lugar dos *scripts* individuais que ele já executa. Apresente a lista detectada ao usuário: "Detectei estes quality gates no projeto — confirme ou edite a lista antes que eu escreva a seção `## Quality gates` no contrato." Cada entrada detectada deve ter um nome, o comando literal a executar e uma descrição de uma linha do que significa passar. Aceite as edições do usuário (inclusões, remoções, reordenações, correções de comando, reescrita de descrições) antes de continuar. Se você não encontrar nenhum *gate*, pergunte: "Não detectei quality gates neste projeto. Pular a seção `## Quality gates` no contrato?" — o usuário pode recusar (nesse caso, peça que ele dite os *gates*) ou aceitar (a seção é omitida por inteiro do contrato gerado).
 
 **Anti-redundancy rule:** NÃO pergunte sobre nada que já seja observável em:
 - Definição da *feature* no *PRD* (Consumes, Provides, Core Scope, Capabilities, Experience, Error Handling)
@@ -160,7 +160,7 @@ Após receber as respostas:
 
 ### Step 4: Gerar Documentos
 
-**Announce:** "Generating THREE documents: SPEC, PLAN, and CONTRACT..."
+**Announce:** "Gerando TRÊS documentos: SPEC, PLAN e CONTRACT..."
 
 **Diretrizes de escala por complexidade:** a fonte da verdade são as tabelas "Escalonamento de profundidade por complexidade" e "Escalonamento do documento PLAN" em `references/feature-template.md`. Consulte-as antes de gerar; não duplique esses números aqui.
 
@@ -235,13 +235,13 @@ Siga o formato de *Phases e Steps* e as *Guidelines de Conteúdo* de `references
   Exemplo concreto. F01 (Landing Page, deps: nenhuma) tem o AC "usuários autenticados que visitam `/` são redirecionados para `/app`". A *auth* é entregue por F02 (irmã, também sem deps). F02 está **fora** do fecho de dependências de F01. ERRADO: declarar `landing-returning-user — existe como um usuário autenticado real com sessão válida`, o que exige o fluxo de *auth* de F02. CERTO: declarar uma entrada de `Configuration` como `a verificação de sessão usada por /` `pode ser levada a um estado autenticado por um mecanismo de teste com escopo de F01 (flag só de teste, override do módulo de sessão, ou cookie de teste honrado pela própria F01); esse mecanismo faz parte das entregas de F01.` F01 implementa tanto o comportamento de produção QUANTO o *override* de teste; o contrato é exercitável só com F01.
 
   Justificativa: o contrato de uma *feature* precisa ser exercitável quando apenas esta *feature* + suas dependências declaradas estão implementadas. Se não for, ou (a) o contrato saiu do escopo declarado e o *prereq* está errado, ou (b) o AC é genuinamente cross-feature e deveria ter sido filtrado no Step 4.3.
-- **Greenfield (nenhuma convenção encontrada):** no *single-feature mode*, leve a pergunta para a entrevista ("Where should fixtures live? How is test data seeded? Which env file does the test runner read?"). Em *Batch Mode*, aplique o default mais comum da *stack* detectada (ex.: `tests/fixtures/` para projetos Node/Vitest) e documente cada convenção escolhida em Assumptions da *spec*. As *features* seguintes do mesmo projeto reutilizam a escolha.
+- **Greenfield (nenhuma convenção encontrada):** no *single-feature mode*, leve a pergunta para a entrevista ("Onde as fixtures devem ficar? Como os dados de teste são semeados? Qual arquivo de env o test runner lê?"). Em *Batch Mode*, aplique o default mais comum da *stack* detectada (ex.: `tests/fixtures/` para projetos Node/Vitest) e documente cada convenção escolhida em Assumptions da *spec*. As *features* seguintes do mesmo projeto reutilizam a escolha.
 - Cite os itens consumidores na cláusula `Used by:` de cada entrada de *Persistent state* e *Static inputs*. Os itens referenciam essas entradas por *handle* (nome da conta, *path* do arquivo) no `given` e no `when`.
 - Escreva os *Prerequisites* em linguagem agnóstica de consumidor — nunca nomeie "o agente implementador" ou "o evaluator"; apenas declare as condições.
 - ACs subjetivos (identidade visual, julgamento qualitativo) são cobertos por um item *placeholder* com `notes: subjective; manual review only`.
 - Critérios de `Cross-Feature Integration` entram apenas no *manifest* da *feature* `Owner` do cenário em A.6; nunca no contrato das demais *features* envolvidas.
 
-**Announce:** "Three documents drafted. Validating coverage..." (o *save* depende de o Step 5 passar, incluindo o *hard coverage gate* do contrato).
+**Announce:** "Três documentos redigidos. Validando a cobertura..." (o *save* depende de o Step 5 passar, incluindo o *hard coverage gate* do contrato).
 
 ### Step 5: Validate e Save
 
@@ -320,7 +320,7 @@ Depois que o Step 5 salvar os três arquivos com sucesso, decida se abre uma *is
 **6.1 — Decidir se cria.**
 
 - Se a *flag* `create-issue` estava no *input* → siga para 6.2 sem perguntar.
-- Se ausente (*single-feature mode*) → pergunte ao usuário: `"Create a <GitHub|GitLab> issue for F<ID> <Feature Name>? (y/n)"`, nomeando o forge resolvido no 6.0. Siga para 6.2 apenas com `y` / `yes` / `sim`. Qualquer outra resposta (ou `n`) pula a criação por inteiro; vá para o Step 7.
+- Se ausente (*single-feature mode*) → pergunte ao usuário: `"Criar uma issue no <GitHub|GitLab> para F<ID> <Feature Name>? (s/n)"`, nomeando o forge resolvido no 6.0. Siga para 6.2 apenas com `s` / `sim` / `y` / `yes`. Qualquer outra resposta (ou `n`) pula a criação por inteiro; vá para o Step 7.
 - Se ausente (*Batch Mode*) → o *orchestrator* já perguntou uma vez em B.4 e propagou a decisão. O *sub-agent* trata a ausência aqui como "não criar", porque o *orchestrator* só encaminha `create-issue` quando o usuário optou por criar. Vá para o Step 7.
 
 **6.2 — Detectar issue aberta existente.**
@@ -328,7 +328,7 @@ Depois que o Step 5 salvar os três arquivos com sucesso, decida se abre uma *is
 Procure no forge uma *issue* aberta cujo título comece com `[F<ID>]`, com a operação **"listar issue aberta por prefixo de título"** (`references/forge.md` § 3.2). Aplique o filtro de título do lado do chamador que a seção descreve — o `--search` do `glab` varre título e descrição, e sem o filtro uma *issue* que apenas cite `[F<ID>]` no corpo passaria por correspondência.
 
 - **Uma correspondência aberta** → pule a criação. Guarde a URL existente para a saída do Step 7.
-- **Várias correspondências abertas** → use a primeira; registre em `Soft-fails`: `"multiple open issues with [F<ID>] prefix; reporting only #<first-number>"`.
+- **Várias correspondências abertas** → use a primeira; registre em `Soft-fails`: `"várias issues abertas com o prefixo [F<ID>]; reportando apenas a #<first-number>"`.
 - **Só correspondências fechadas OU nenhuma** → siga para 6.3 (criar nova). Uma *issue* fechada significa que o ciclo anterior desta *feature* já foi entregue; a nova *spec* merece uma *issue* nova.
 
 **6.3 — Montar título e corpo.**
@@ -389,11 +389,11 @@ Implementa **F<ID>: <Nome da Feature>**.
 
 Guarde a URL da *issue* retornada (`url` no GitHub, `web_url` no GitLab). NÃO adicione *labels*, *assignees*, *milestones* nem *projects* — nenhum é definido por padrão. Times que os queiram configuram os *defaults* do repositório no próprio forge ou os aplicam manualmente depois da criação.
 
-**6.5 — Tratamento de falha.** Se o CLI do forge sair com código diferente de zero (*auth*, rede, CLI não instalado, repositório não conectado), NÃO aborte a execução. Os três arquivos já estão salvos — essa é a entrega principal da *skill*. Registre em `Soft-fails`: `"issue not created: <stderr excerpt>; run manually: <comando de criação de issue do forge, § 3.3, com --body-file/--description-file apontando para <path-to-body>.md>"`. Siga para o Step 7.
+**6.5 — Tratamento de falha.** Se o CLI do forge sair com código diferente de zero (*auth*, rede, CLI não instalado, repositório não conectado), NÃO aborte a execução. Os três arquivos já estão salvos — essa é a entrega principal da *skill*. Registre em `Soft-fails`: `"issue não criada: <stderr excerpt>; rode manualmente: <comando de criação de issue do forge, § 3.3, com --body-file/--description-file apontando para <path-to-body>.md>"`. Siga para o Step 7.
 
 ### Step 7: Output Result
 
-Informe o *path* dos arquivos de *spec*, *plan* e *contract*, o nível de complexidade da *feature*, quantas *phases* há no *plan* e a contagem de itens do contrato por superfície (ex.: "Contract: 14 items across HTTP API (8), UI (4), E2E (2); 9/9 PRD ACs covered"). Informe também a URL da *issue* (criada ou existente) quando o Step 6 rodou, e os `Soft-fails`, quando houver.
+Informe o *path* dos arquivos de *spec*, *plan* e *contract*, o nível de complexidade da *feature*, quantas *phases* há no *plan* e a contagem de itens do contrato por superfície (ex.: "Contrato: 14 itens entre HTTP API (8), UI (4), E2E (2); 9/9 ACs do PRD cobertos"). Informe também a URL da *issue* (criada ou existente) quando o Step 6 rodou, e os `Soft-fails`, quando houver.
 
 ---
 
@@ -415,7 +415,7 @@ Um *input* de *single-feature* (ex: `F03`, `Video Upload`) continua a usar o flu
 
 Todas as *features* em um único *batch* devem pertencer à mesma *wave* (conforme `Execution Waves` no `Appendix A` do PRD).
 
-- *Input* de múltiplas ondas (*cross-wave*, ex: `wave 3 wave 4`, ou `F04 F05` onde F04 é *wave 3* e F05 é *wave 4*) é rejeitado. Mensagem: "Features from different waves cannot be generated in the same batch. Later-wave specs are richer when generated after earlier waves are implemented, so the codebase has more patterns to observe. Run wave N first."
+- *Input* de múltiplas ondas (*cross-wave*, ex: `wave 3 wave 4`, ou `F04 F05` onde F04 é *wave 3* e F05 é *wave 4*) é rejeitado. Mensagem: "Features de waves diferentes não podem ser geradas no mesmo batch. As specs de waves posteriores ficam mais ricas quando geradas depois que as waves anteriores estão implementadas, porque a codebase tem mais patterns a observar. Rode a wave N primeiro."
 - Misturar `wave N` com nomes/IDs extras de *features* é permitido apenas se todas as *features* listadas pertencerem à wave N. Qualquer exceção aciona a mesma rejeição.
 - Número de *wave* desconhecido → rejeite, listando as *waves* disponíveis em `Execution Waves` (`Appendix A` do PRD).
 - ID/nome da *feature* desconhecido → rejeite, listando as *features* disponíveis.
@@ -426,13 +426,13 @@ O Step 1 (Resolver Input e Pre-Analysis) é adaptado para o contexto de *batch* 
 
 **B.1: Resolver o batch**
 
-- **Localize o PRD** usando as regras do Step 1.1 (*path* fornecido pelo usuário, `docs/PRD.md`, `PRD.md`, ou similares). Se nenhum *PRD* for encontrado, pare e direcione o usuário ao `prd-writer`. Se existirem múltiplos *PRDs* plausíveis, pergunte ao usuário qual utilizar ANTES de continuar — esta é a primeira pausa interativa possível no *orchestrator*.
+- **Localize o PRD** usando as regras do Step 1.1 (*path* fornecido pelo usuário, `docs/PRD.md`, `PRD.md`, ou similares). Se nenhum *PRD* for encontrado, pare e direcione o usuário ao `prd-writer-for-complete-project`. Se existirem múltiplos *PRDs* plausíveis, pergunte ao usuário qual utilizar ANTES de continuar — esta é a primeira pausa interativa possível no *orchestrator*.
 - Faça o *parsing* do *input* em uma lista de *target features* (expanda *waves*, faça *merge* de listas, remova duplicatas).
-- Se o *PRD* não tiver subseção `Execution Waves` (`Appendix A`, ou Seção 8 em PRDs antigos) e o *input* referenciar uma *wave* (ex: `wave 3`), rejeite com: "Wave references require an 'Execution Waves' subsection in the PRD, which this PRD does not have. Use feature IDs directly or update the PRD." Não tente sintetizar *waves*.
+- Se o *PRD* não tiver subseção `Execution Waves` (`Appendix A`, ou Seção 8 em PRDs antigos) e o *input* referenciar uma *wave* (ex: `wave 3`), rejeite com: "Referências a wave exigem a subseção `Execution Waves` no PRD, que este PRD não tem. Use os IDs das features diretamente ou atualize o PRD." Não tente sintetizar *waves*.
 - Se o nome de alguma *feature* no *input* for ambíguo (corresponde a múltiplas *features* no *PRD*, ex: "upload" corresponde a F03 e F11), liste as candidatas para o usuário e peça a desambiguação ANTES de prosseguir para o restante de B.1. Esta é a segunda pausa interativa possível antes do plano consolidado.
 - Se qualquer ID ou nome de *feature* não existir no *PRD*, rejeite com a lista das *features* disponíveis.
 - Valide a regra de *same-wave*.
-- Para cada *target*, verifique se `docs/<feature-id>-<kebab-name>/spec.md`, `plan.md` ou `contract.md` já existem. Marque essas *features* como "already has spec/plan/contract" (tratados como uma unidade — os três arquivos compartilham o ciclo de vida).
+- Para cada *target*, verifique se `docs/<feature-id>-<kebab-name>/spec.md`, `plan.md` ou `contract.md` já existem. Marque essas *features* como "já tem spec/plan/contract" (tratados como uma unidade — os três arquivos compartilham o ciclo de vida).
 
 **B.2: Classificação de Greenfield e Foundation**
 
@@ -442,37 +442,37 @@ Aplique o *Foundation state detection* do Step 1.2 uma vez para todo o *batch*. 
 
 **B.3: Dependency readiness**
 
-Para cada *target feature*, verifique suas dependências do *PRD* (`Dependency Graph` no `Appendix A`). Se uma dependência não estiver implementada E não estiver ela própria no *batch* atual, marque a *feature* como "dependency missing — will abort". Dependências satisfeitas por outras *features* no mesmo *batch* são aceitáveis (elas terão suas *specs* geradas juntas; a ordem de implementação é decisão do usuário).
+Para cada *target feature*, verifique suas dependências do *PRD* (`Dependency Graph` no `Appendix A`). Se uma dependência não estiver implementada E não estiver ela própria no *batch* atual, marque a *feature* como "dependência ausente — vai abortar". Dependências satisfeitas por outras *features* no mesmo *batch* são aceitáveis (elas terão suas *specs* geradas juntas; a ordem de implementação é decisão do usuário).
 
 **B.4: Apresentar o plan consolidado e aguardar confirmação**
 
 Mostre o *plan* e aguarde a confirmação explícita. *Template default*:
 
 ```
-Batch plan for <input>:
-- F04 Video Library (Core only) — new
-- F07 Background Processing Pipeline (full scope) — already has spec (skip / regenerate?)
-- F12 Administration Panel (full scope — no Core/Full split) — new
+Plano do batch para <input>:
+- F04 Video Library (só o Core) — nova
+- F07 Background Processing Pipeline (escopo completo) — já tem spec (pular / regenerar?)
+- F12 Administration Panel (escopo completo — sem divisão Core/Full) — nova
 
-Mode: parallel (N sub-agents)   # ou "sequential (Foundation detected)" quando aplicável
-Codebase state: Foundation complete   # ou greenfield / Partial Foundation
-Auto-accept: all spec-writer recommendations will be applied
-Destination: docs/F04-video-library/, docs/F07-background-processing-pipeline/, docs/F12-administration-panel/
+Modo: paralelo (N sub-agents)   # ou "sequencial (Foundation detectada)" quando aplicável
+Estado da codebase: Foundation complete   # ou greenfield / Partial Foundation
+Auto-accept: todas as recomendações do spec-writer serão aplicadas
+Destino: docs/F04-video-library/, docs/F07-background-processing-pipeline/, docs/F12-administration-panel/
 
-OK to proceed? (yes/no)
+Posso prosseguir? (sim/não)
 ```
 
 *Tag* de *scope* por *feature* (escolha a certa por formato de *PRD*):
-- `(Core only)` — o *PRD* da *feature* possui ambos os blocos `Core Scope` e `Full Scope additions` (O *Auto-Accept* escolhe Core).
-- `(full scope)` — o *PRD* da *feature* possui apenas um dos blocos de *scope*, então Core e Full são o mesmo.
-- `(full scope — no Core/Full split)` — o *PRD* da *feature* não possui nenhum dos blocos; a *feature* inteira está no *scope*.
+- `(só o Core)` — o *PRD* da *feature* possui ambos os blocos `Core Scope` e `Full Scope additions` (O *Auto-Accept* escolhe Core).
+- `(escopo completo)` — o *PRD* da *feature* possui apenas um dos blocos de *scope*, então Core e Full são o mesmo.
+- `(escopo completo — sem divisão Core/Full)` — o *PRD* da *feature* não possui nenhum dos blocos; a *feature* inteira está no *scope*.
 
-*Tags* de status por *feature*: `new`, `already has spec (skip / regenerate?)`, `dependency missing — will abort`, `Foundation, will run sequentially`, `already implemented (Foundation), skipping`.
+*Tags* de status por *feature*: `nova`, `já tem spec (pular / regenerar?)`, `dependência ausente — vai abortar`, `Foundation, roda em série`, `Foundation já implementada, pulando`.
 
-Prossiga apenas com um "yes" explícito. Diante de um "no" ou qualquer resposta negativa/ambígua, aborte o processo de forma limpa, sem fazer *dispatch* dos *sub-agents* e sem criar nenhum arquivo. Se o usuário quiser alterar o *plan*, ele re-invoca a *skill* com o *input* atualizado. As *features* marcadas como "already has spec" são ignoradas por padrão; o usuário pode solicitar a regeneração na resposta de confirmação (ex: "yes, regenerate F07").
+Prossiga apenas com um "sim" explícito (`yes` também vale). Diante de um "não" ou qualquer resposta negativa/ambígua, aborte o processo de forma limpa, sem fazer *dispatch* dos *sub-agents* e sem criar nenhum arquivo. Se o usuário quiser alterar o *plan*, ele re-invoca a *skill* com o *input* atualizado. As *features* marcadas como "já tem spec" são ignoradas por padrão; o usuário pode solicitar a regeneração na resposta de confirmação (ex.: "sim, regenerar F07").
 
-**Pergunta de criação de issue (apenas quando a *flag* `create-issue` NÃO estava no *input* do *batch*):** depois que o usuário responder "yes" ao *plan* consolidado acima, faça uma pergunta adicional: `"Also create a <GitHub|GitLab> issue per feature in this batch? (y/n)"`, nomeando o forge resolvido conforme `${CLAUDE_PLUGIN_ROOT}/references/forge.md`. A resposta vale para **todas** as *features* do *batch* — os *sub-agents* não perguntam individualmente. Registre a resposta:
-- `y` / `yes` / `sim` → defina a *flag* `create-issue` e encaminhe-a no *prompt* de todos os *sub-agents* em B.5.
+**Pergunta de criação de issue (apenas quando a *flag* `create-issue` NÃO estava no *input* do *batch*):** depois que o usuário responder "sim" ao *plan* consolidado acima, faça uma pergunta adicional: `"Criar também uma issue no <GitHub|GitLab> para cada feature deste batch? (s/n)"`, nomeando o forge resolvido conforme `${CLAUDE_PLUGIN_ROOT}/references/forge.md`. A resposta vale para **todas** as *features* do *batch* — os *sub-agents* não perguntam individualmente. Registre a resposta:
+- `s` / `sim` / `y` / `yes` → defina a *flag* `create-issue` e encaminhe-a no *prompt* de todos os *sub-agents* em B.5.
 - qualquer outra coisa → não encaminhe; os *sub-agents* pulam a criação de *issue* do Step 6.
 
 Se `create-issue` já estava no *input* do *batch*, pule esta pergunta e encaminhe a *flag* a todos os *sub-agents* incondicionalmente.
@@ -495,11 +495,11 @@ Cada *sub-agent* realiza seu próprio *Pattern Discovery* (Step 1.3) de forma in
 Aguarde todos os *sub-agents*. Relate o resultado consolidado:
 
 ```
-Batch complete: 3/4 features generated successfully
+Batch concluído: 3/4 features geradas com sucesso
 ✓ F04 → docs/F04-video-library/
 ✓ F07 → docs/F07-background-processing-pipeline/
 ✓ F12 → docs/F12-administration-panel/
-✗ F05 → failed: <reason>
+✗ F05 → falhou: <motivo>
 ```
 
 Falhas de *sub-agents* são isoladas — outros *sub-agents* continuam. *Features* que falharam podem ser rodadas novamente de forma individual.
@@ -523,7 +523,7 @@ Cada *sub-agent* pula a entrevista interativa (Step 2) e aplica esses padrões p
 | Nenhum codebase pattern encontrado (codebase não vazia, mas Pattern Discovery não retornou nada) | Faça *fallback* para *industry best practices* da *stack* detectada; documente como uma *assumption* explícita |
 | Conjunto de superfícies do contrato ambíguo (o PRD não indica claramente HTTP vs UI vs ambos) | Emita todas as superfícies com ao menos um sinal no PRD (Capabilities, Experience, Provides); documente a escolha em Assumptions |
 | Esclarecimento de quality gates (Step 2 — gates detectados) | Inclua automaticamente todos os *gates* detectados, aplicando a regra do *wrapper* do Step 2, sem perguntar; documente a lista em Assumptions para que o usuário possa revisar e fazer *override* depois. NÃO bloqueie. |
-| Esclarecimento de quality gates (Step 2 — nenhum gate detectado) | Omita a seção `## Quality gates` por inteiro; documente a ausência em Assumptions ("no quality gates detected in the project; section omitted"). NÃO bloqueie. |
+| Esclarecimento de quality gates (Step 2 — nenhum gate detectado) | Omita a seção `## Quality gates` por inteiro; documente a ausência em Assumptions ("nenhum quality gate detectado no projeto; seção omitida"). NÃO bloqueie. |
 | Criação de issue (Step 6 — flag `create-issue` ausente) | O *orchestrator* já resolveu isso em B.4 (perguntou uma vez e propagou a todos os *sub-agents*). O *sub-agent* trata a ausência aqui como "não criar"; o *orchestrator* só encaminha `create-issue` quando o usuário optou por criar em B.4. NÃO pergunte; NÃO crie em silêncio. |
 | Criação de issue (Step 6 — flag `create-issue` presente, encaminhada pelo orchestrator) | Crie a *issue* conforme o Step 6, sem perguntar. Em caso de falha do CLI do forge, registre em `Soft-fails` (espelhando a regra do Step 6.5); NÃO bloqueie o sucesso do *sub-agent*. |
 | Falha do hard coverage gate do contrato em Batch Mode | O *sub-agent* falha a *feature* (nenhum arquivo salvo). Reportado ao *orchestrator* como qualquer outra falha (B.6) para que o usuário investigue |
@@ -536,7 +536,7 @@ Todas as outras regras do spec-writer (conteúdo *PRD-driven*, aderência aos *c
 
 ## Regras
 
-**Precedência:** Quando uma *feature* está rodando em *Batch Mode*, os grupos de regras de (Batch Mode) abaixo se sobrepõem a qualquer regra conflitante nas listas gerais Always/Never — notavelmente, o *Batch Mode* sobrepõe as regras relacionadas à entrevista ("Preserve the iterative interview style", "Skip interview questions...", etc.). Todas as regras não conflitantes continuam válidas.
+**Precedência:** Quando uma *feature* está rodando em *Batch Mode*, os grupos de regras de (Batch Mode) abaixo se sobrepõem a qualquer regra conflitante nas listas gerais Always/Never — notavelmente, o *Batch Mode* sobrepõe as regras relacionadas à entrevista ("Preserve o estilo iterativo da entrevista", "Pule perguntas da entrevista…", etc.). Todas as regras não conflitantes continuam válidas.
 
 **Sempre:**
 - Gere TRÊS arquivos (*spec*, *plan* e *contract*) em `docs/<feature-id>-<kebab-name>/`
@@ -570,7 +570,7 @@ Todas as outras regras do spec-writer (conteúdo *PRD-driven*, aderência aos *c
 - Crie fases de *testing* no documento de *plan*
 - Inclua *metadata* de Feature ID/Data/Versão
 - Inclua detalhes de implementação nos *steps* do *plan* (tipos de dados, colunas, métodos)
-- Prossiga sem um *PRD* — sempre exija um e direcione o usuário para o `prd-writer` caso ausente
+- Prossiga sem um *PRD* — sempre exija um e direcione o usuário para o `prd-writer-for-complete-project` caso ausente
 - Faça novamente perguntas cujas respostas sejam observáveis na *codebase* ou já declaradas no *PRD*
 - Restrinja a exploração da *codebase* ao *checklist* de *baseline* — o *baseline* é um piso, não um teto
 - Salve a *spec* ou o *plan* quando o *coverage gate* do contrato falhar — os três são salvos juntos ou nenhum
@@ -615,7 +615,7 @@ Todas as outras regras do spec-writer (conteúdo *PRD-driven*, aderência aos *c
 
 **Precedência de Batch Mode:** Em *Batch Mode*, qualquer *edge case* abaixo que instrua o *sub-agent* a "perguntar ao usuário", "confirmar com o usuário", ou "aprofundar a entrevista" é substituído pela linha correspondente da *Auto-Accept Policy* (seção Batch Mode). Os *sub-agents* nunca pausam para perguntar; os *edge cases* em nível de *orchestrator* ("Multiple PRD files", "Ambiguous feature reference", avisos de dependência) são resolvidos de uma só vez em B.1–B.3 antes do *dispatch*.
 
-**Nenhum PRD encontrado:** Pare e instrua o usuário a gerar um primeiro com o `prd-writer`. Não rode a *skill* sem um *PRD*.
+**Nenhum PRD encontrado:** Pare e instrua o usuário a gerar um primeiro com o `prd-writer-for-complete-project`. Não rode a *skill* sem um *PRD*.
 
 **Feature não encontrada no PRD:** Liste as *features* disponíveis na tabela `Dependency Graph` (`Appendix A` do PRD) e pergunte ao usuário qual era a intencionada.
 
@@ -623,7 +623,7 @@ Todas as outras regras do spec-writer (conteúdo *PRD-driven*, aderência aos *c
 
 **Múltiplos arquivos de PRD no projeto:** Pergunte ao usuário qual *PRD* utilizar.
 
-**Dependência ainda não implementada:** Avise o usuário (ex: "F08 depends on F07, which is not yet implemented. Continue anyway?") e prossiga apenas se confirmado. A *spec* ainda pode ser gerada — a ordem de implementação é decisão do usuário.
+**Dependência ainda não implementada:** Avise o usuário (ex.: "F08 depende de F07, que ainda não está implementada. Continuar mesmo assim?") e prossiga apenas se confirmado. A *spec* ainda pode ser gerada — a ordem de implementação é decisão do usuário.
 
 **Codebase vazia ou apenas com scaffolding (primeira feature):** Pule o *Pattern Discovery* e faça perguntas transversais da *stack inline* no Step 2. As *features* subsequentes farão a leitura da *codebase*.
 
@@ -647,14 +647,14 @@ Todas as outras regras do spec-writer (conteúdo *PRD-driven*, aderência aos *c
 
 **Referência de wave desconhecida:** Liste as *waves* disponíveis em `Execution Waves` (`Appendix A` do PRD) e peça para o usuário esclarecer.
 
-**O batch contém uma feature que já possui spec:** O *plan* consolidado a sinaliza como "already has spec"; o padrão é pular (*skip*). O usuário pode solicitar a regeneração explicitamente na resposta de confirmação.
+**O batch contém uma feature que já possui spec:** O *plan* consolidado a sinaliza como "já tem spec"; o padrão é pular (*skip*). O usuário pode solicitar a regeneração explicitamente na resposta de confirmação.
 
-**O batch contém uma feature cuja dependência externa não está implementada:** Marque a *feature* como "dependency missing — will abort" no *plan*; gere as *specs* para as *features* restantes e reporte a que foi abortada no resultado final. Dependências satisfeitas por outra *feature* no mesmo *batch* não contam como não implementadas.
+**O batch contém uma feature cuja dependência externa não está implementada:** Marque a *feature* como "dependência ausente — vai abortar" no *plan*; gere as *specs* para as *features* restantes e reporte a que foi abortada no resultado final. Dependências satisfeitas por outra *feature* no mesmo *batch* não contam como não implementadas.
 
-**Batch com múltiplas Foundation features em um projeto greenfield:** As *Foundations* rodam sequencialmente na ordem em que aparecem em `Foundation Features` (`Appendix A` do PRD). O *plan* afirma isso explicitamente ("Mode: sequential (Foundation detected)"). *Features* não-*Foundation* no mesmo *batch* ainda rodam em paralelo após as *Foundations* finalizarem.
+**Batch com múltiplas Foundation features em um projeto greenfield:** As *Foundations* rodam sequencialmente na ordem em que aparecem em `Foundation Features` (`Appendix A` do PRD). O *plan* afirma isso explicitamente ("Modo: sequencial (Foundation detectada)"). *Features* não-*Foundation* no mesmo *batch* ainda rodam em paralelo após as *Foundations* finalizarem.
 
 **Falha de sub-agent no batch:** Os outros *sub-agents* continuam até a conclusão. O relatório final lista os sucessos e as falhas com os motivos. As *features* que falharam podem ser rodadas individualmente ou como um *batch* menor.
 
-**PRD sem subseção "Execution Waves" no batch mode:** As referências de *waves* (`wave N`) requerem esta subseção para serem expandidas em *features*. Rejeite com: "Wave references require an 'Execution Waves' subsection in the PRD (Appendix A). This PRD does not have one. Use feature IDs directly or update the PRD." Não tente sintetizar as *waves*.
+**PRD sem subseção "Execution Waves" no batch mode:** As referências de *waves* (`wave N`) requerem esta subseção para serem expandidas em *features*. Rejeite com: "Referências a wave exigem a subseção `Execution Waves` no PRD (`Appendix A`). Este PRD não tem uma. Use os IDs das features diretamente ou atualize o PRD." Não tente sintetizar as *waves*.
 
-**O usuário recusa o plan consolidado (responde "no" no B.4):** Aborte o processo de forma limpa. Nenhum *sub-agent* despachado, nenhum arquivo criado, nenhum estado parcial deixado para trás. O usuário re-invoca a *skill* com *input* ajustado.
+**O usuário recusa o plan consolidado (responde "não" no B.4):** Aborte o processo de forma limpa. Nenhum *sub-agent* despachado, nenhum arquivo criado, nenhum estado parcial deixado para trás. O usuário re-invoca a *skill* com *input* ajustado.

@@ -50,8 +50,8 @@ Faça o parsing de todo o input como free-form. Extraia:
 
 Se a resolução falhar:
 
-- Qualquer um de `spec.md`, `plan.md` ou `contract.md` ausente na pasta resolvida → aborte: "`<missing-file>` missing in `<folder>`. Regenerate the feature triple via the `spec-writer` skill — the three files share a single lifecycle and the implementer requires all three."
-- Nenhum PRD encontrado → aborte: "No PRD found. Pass the path explicitly."
+- Qualquer um de `spec.md`, `plan.md` ou `contract.md` ausente na pasta resolvida → aborte: "`<missing-file>` não encontrado em `<folder>`. Regenere o trio da feature com a skill `spec-writer` — os três arquivos compartilham um único ciclo de vida e o implementador precisa dos três."
+- Nenhum PRD encontrado → aborte: "Nenhum PRD encontrado. Passe o path explicitamente."
 - Múltiplos PRDs plausíveis → aborte e liste os candidatos.
 - Feature reference ambígua (múltiplas pastas dão match) → aborte e liste os candidatos.
 
@@ -88,21 +88,21 @@ Para cada override reconhecido, registre o antes/depois para a seção "Override
 
 **Immutable core (não pode sofrer override):** a integração com o contrato como um todo — carregar o `contract.md`, executar o walk-through dos Contract Prerequisites no 6.3, executar o AC pass-through no 6.4 e renderizar o AC report com o header "preliminary readiness — canonical AC verification = contract evaluator" (que preserva a traceability com o PRD pelo texto copiado no manifest). Instruções que desabilitariam qualquer um desses pontos são logadas em "Overrides ignored" com o motivo.
 
-Instruções ambíguas ou contraditórias → o default vence; logado em "Overrides ignored" com "ambiguous, kept default".
+Instruções ambíguas ou contraditórias → o default vence; logado em "Overrides ignored" com "ambíguo, mantido o default".
 
 ### Step 4: Pre-flight Dependency Check
 
 **4.1 — Contract sanity:**
 
 - `contract.md` tem uma seção `## Coverage Manifest` reconhecível (match do heading pelo formato) → prossiga.
-- Coverage Manifest vazio ou ausente → aborte: "F<target>'s contract has no in-scope ACs to verify. Regenerate via `spec-writer` to fix the coverage gate."
+- Coverage Manifest vazio ou ausente → aborte: "O contrato de F<target> não tem nenhum AC in-scope a verificar. Regenere com o `spec-writer` para fechar o coverage gate."
 - `contract.md` não tem seção `## Prerequisites`, ou a seção está malformada (nenhuma subseção reconhecível) → aborte com a mesma mensagem de regeneração. Prerequisites é o único mecanismo que diz ao implementador quais artefatos produzir; sem ele a execução não consegue honrar seu contrato.
 
 **4.2 — Feature dependencies:**
 
 Localize o grafo de dependências ENTRE FEATURES no PRD semanticamente (título típico: "Dependency Graph", normalmente dentro de "Appendix A: Implementation Planning"; formato típico: uma tabela pareando cada feature com seus prerequisites por ID). NÃO confunda com a seção de negócio "Dependencies" (fornecedores, times, exigências legais) — essa não descreve prerequisites de implementação e não deve ser usada aqui. Para cada dependência listada da target feature, verifique se ela parece implementada na codebase (procure pelos arquivos característicos descritos no Component Overview do `spec.md` da própria dependência, ou marcadores óbvios no source-level).
 
-- Qualquer dependência ausente → **aborte antes de qualquer implementação**. Reporte: "F<target> depends on F<N>, which is not implemented yet."
+- Qualquer dependência ausente → **aborte antes de qualquer implementação**. Reporte: "F<target> depende de F<N>, que ainda não está implementada."
 - Todas as dependências presentes → prossiga para o Step 5.
 
 Se o PRD não tiver o grafo de dependências entre features, faça o skip do 4.2 e prossiga.
@@ -334,7 +334,7 @@ Esta skill grava suas próprias transições de status num arquivo compartilhado
 2. `prd_progress.json` na mesma pasta do PRD resolvido no Step 1 (o `prd-writer-for-complete-project` grava o arquivo ao lado do PRD por padrão).
 3. Procure a partir do CWD para cima (máximo 4 níveis) pelo `prd_progress.json` mais próximo.
 
-Se não for encontrado, faça o log de uma linha em `Soft-fails` "progress file not found, status not tracked" e prossiga. O trabalho de implementação nunca é bloqueado pelo tracking.
+Se não for encontrado, faça o log de uma linha em `Soft-fails` "arquivo de progresso não encontrado, status não rastreado" e prossiga. O trabalho de implementação nunca é bloqueado pelo tracking.
 
 **Regra de escopo:** nunca toque na entrada de qualquer feature que não seja a target feature. Nunca modifique os campos de primeiro nível (`schema_version`, `prd_path`, `generated_at`).
 
@@ -452,13 +452,13 @@ Overrides não reconhecidos ou contraditórios: o default vence; registrados em 
 
 **Re-invocation após um run parcial**: O Step 5.1 detecta fases already-committed através do commit-message match e faz o skip delas. O Step 6.3 ainda roda e pode produzir um commit de remediação se um Prerequisite não foi produzido pelas fases puladas. Mudanças uncommitted na working-tree de um run interrompido anteriormente ficam as-is (como estão); a skill não as limpa.
 
-**Spec e item do contrato discordam sobre uma propriedade observável**: siga o item, registre "spec said X, item `<ID>` asserted Y, followed Y" em `Deviations`. Não pause para reconciliar, não edite o `spec.md` para bater — a divergência é bug do `spec-writer`, não preocupação do implementador.
+**Spec e item do contrato discordam sobre uma propriedade observável**: siga o item, registre "a spec dizia X, o item `<ID>` afirma Y, segui Y" em `Deviations`. Não pause para reconciliar, não edite o `spec.md` para bater — a divergência é bug do `spec-writer`, não preocupação do implementador.
 
 **Spec descreve um detalhe de estrutura interna (file path, nome de classe) sem contrapartida em item**: siga o spec; a regra items-win só se aplica quando as duas fontes falam da mesma propriedade.
 
 **Fixture de Static input não pode ser produzida** (ex.: `ffmpeg` fora do PATH, mas o contrato exige um arquivo H.264 válido): marque a fixture `✗ missing` no 6.3 com o motivo, liste-a em `Missing prerequisites` e deixe a decisão de status rebaixar para `incomplete`. Não aborte o run.
 
-**Seed de Persistent state não pode ser escrito** porque a convenção de seeding do projeto não está registrada nas Assumptions do `spec.md` nem é encontrada na codebase: faça o log em `Soft-fails` ("seeding convention undocumented and not found in codebase; cannot author seed for `<handle>`") e marque a entrada `✗ missing`. O status é rebaixado para `incomplete`.
+**Seed de Persistent state não pode ser escrito** porque a convenção de seeding do projeto não está registrada nas Assumptions do `spec.md` nem é encontrada na codebase: faça o log em `Soft-fails` ("convenção de seeding não documentada e não encontrada na codebase; não dá para escrever o seed de `<handle>`") e marque a entrada `✗ missing`. O status é rebaixado para `incomplete`.
 
 **Chave de Configuration já presente no projeto, mas com valor incompatível com o significado declarado no contrato**: não sobrescreva em silêncio. Registre em `Deviations`, proponha o valor alinhado ao contrato como default e adicione a chave em `Missing prerequisites` para que o usuário revise.
 

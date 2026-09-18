@@ -46,7 +46,7 @@ Qualquer outra coisa reconhecida no input original é repassada literalmente ao 
 
 Se a resolução falhar:
 
-- Pasta da feature ausente ou sem `spec.md` + `plan.md` + `contract.md` → aborte: "feature folder missing required file `<file>`. Regenerate via `spec-writer`."
+- Pasta da feature ausente ou sem `spec.md` + `plan.md` + `contract.md` → aborte: "a pasta da feature está sem o arquivo obrigatório `<file>`. Regenere com o `spec-writer`."
 - Várias pastas plausíveis → aborte e liste os candidatos.
 
 ## OUTPUT
@@ -87,10 +87,10 @@ Se os dois comandos falharem (clone sem `origin/HEAD` local, sem remote, sem red
 
 | `status` atual | Aviso a emitir |
 |---|---|
-| `done` | `"feature already 'done' (last eval clean); re-running will re-verify and may regress to 'fail' / 'pr-blocked'"` |
-| `pr-blocked` | `"feature is 'pr-blocked' (prior merge-conflict unresolvable); re-running may overwrite this state"` |
-| `removed` | `"feature is 'removed' from the current PRD; re-running will resurrect it without applying the prd-writer-for-complete-project Caso B reset (cycles, started_at, etc. carry over). Consider regenerating the PRD via prd-writer-for-complete-project first"` |
-| `implementing` | `"feature is 'implementing' (a prior implement-feature run never reached terminal state); re-running is safe — Write 1 will refresh the entry"` |
+| `done` | `"feature já está 'done' (última avaliação limpa); re-rodar vai re-verificar e pode regredir para 'fail' / 'pr-blocked'"` |
+| `pr-blocked` | `"feature está 'pr-blocked' (conflito de merge anterior não resolvido); re-rodar pode sobrescrever esse estado"` |
+| `removed` | `"feature está 'removed' no PRD atual; re-rodar vai ressuscitá-la sem aplicar o reset do Caso B do prd-writer-for-complete-project (cycles, started_at etc. são mantidos). Considere regenerar o PRD com o prd-writer-for-complete-project antes"` |
+| `implementing` | `"feature está 'implementing' (uma execução anterior do implement-feature não chegou a estado terminal); re-rodar é seguro — o Write 1 renova a entrada"` |
 
 Os quatro estados acima são os únicos que merecem aviso. `pending` / `implemented` / `fail` são pontos de entrada normais do orquestrador e não produzem aviso.
 
@@ -111,8 +111,8 @@ O lockfile do orquestrador fica em `<feature-folder>/.orchestrate.lock`. É um a
 
 1. Se o lockfile não existir → grave-o com o PID atual e o `<run-id>`. Prossiga.
 2. Se o lockfile existir, leia o PID. Verifique se está vivo com `kill -0 <pid>`:
-   - PID vivo → aborte: "concurrent /implement-and-evaluate run for `<feature-id>`: PID `<N>` alive. Wait for it to finish or stop it, then re-run."
-   - PID morto → a execução anterior caiu; sobrescreva o lockfile e prossiga. Registre em `Soft-fails`: "stale lockfile from PID `<dead-pid>`; overwrote".
+   - PID vivo → aborte: "já existe uma execução de /implement-and-evaluate para `<feature-id>`: PID `<N>` vivo. Espere terminar ou encerre-a, e re-rode."
+   - PID morto → a execução anterior caiu; sobrescreva o lockfile e prossiga. Registre em `Soft-fails`: "lockfile obsoleto do PID `<dead-pid>`; sobrescrito".
 
 **Liberação do lock:** apague o arquivo no final da execução (Step 8) ou em qualquer caminho de abort. A liberação é idempotente — tenha sucesso em silêncio se o arquivo já não existir. O lockfile nunca entra em commit.
 
@@ -436,7 +436,7 @@ Faça o stage **por path explícito**, apenas destes arquivos:
 - A pasta `eval-screenshots-<ts>/` irmã de cada um desses relatórios, quando existir.
 - Cada `design-report-<ts>.md` e a pasta `design-screenshots-<ts>/` devolvidos pelos subagentes do Step 6.5 **desta execução**, quando o 6.5 rodou. Mesma regra: artefatos de outras execuções não entram.
 - O journal desta execução, `<feature-folder>/orchestration-<run-id>.md`, com o Cycle Log e o Cycle Detail atualizados.
-- O `prd_progress.json` localizado conforme **PROGRESS TRACKING**, quando `git status --porcelain -- <path>` mostrar mudança. Se o arquivo estiver fora do repositório ou for ignorado pelo git, não faça stage e registre em `Soft-fails`: "prd_progress.json not versioned in this repository; left out of the artifacts commit".
+- O `prd_progress.json` localizado conforme **PROGRESS TRACKING**, quando `git status --porcelain -- <path>` mostrar mudança. Se o arquivo estiver fora do repositório ou for ignorado pelo git, não faça stage e registre em `Soft-fails`: "prd_progress.json não versionado neste repositório; ficou fora do commit de artefatos".
 
 Nunca faça stage do `.orchestrate.lock`, de journals de outras execuções nem de qualquer outro arquivo. Nunca use `git add -A` / `git add .`.
 
@@ -688,7 +688,7 @@ As escritas diretas do orquestrador se limitam a:
 
 Nos casos 2 e 3, NÃO repasse o path às sub-skills — deixe que elas o descubram de forma independente (elas usam a mesma ordem de busca e chegam ao mesmo arquivo em condições normais).
 
-Se não for encontrado, registre em `Soft-fails` a linha "progress file not found, orchestrator-level write skipped" e prossiga. O journal continua registrando tudo; o JSON apenas fica sem a anotação do orquestrador.
+Se não for encontrado, registre em `Soft-fails` a linha "arquivo de progresso não encontrado, escrita do orquestrador pulada" e prossiga. O journal continua registrando tudo; o JSON apenas fica sem a anotação do orquestrador.
 
 **Regra de escopo:** nas escritas de status, nunca modifique a entrada de outra feature além da target feature e nunca modifique os campos de primeiro nível (`schema_version`, `prd_path`, `generated_at`). O orquestrador pode gravar `status`, `failure_reason`, `completed_at` e `updated_at` — e apenas nos casos abaixo. A única exceção à regra de escopo é a resolução de conflito do Step 7.4, que adota a versão da branch padrão para os campos de primeiro nível e para as outras features: isso é integração do merge, não uma escrita de status.
 
@@ -831,7 +831,7 @@ Texto não reconhecido fica no `tail`. Se o implementador o ignorar, isso é pro
 - **A feature já está em estado clean quando invocada** (implementador diz que todas as fases estão commitadas, evaluator diz clean) → terminal `success` depois de um ciclo. O journal registra "0 phases newly committed; 0 fix cycles".
 - **O `tail` do implementador contém um token de nível de orquestrador** (ex.: `max 5 retries` aparece no input do usuário, mas o orquestrador deixou passar) → o implementador vai vê-lo e não vai interpretá-lo como do orquestrador, já que `max N retries` também está na gramática do implementador (é o retry de hard-fail do implementador, não o do orquestrador). Essa dupla contagem é aceitável — o implementador a aplica dentro do seu loop de hard-fail; o orquestrador já extraiu sua própria cópia no Step 1.
 - **Evaluator retorna `aborted-at-item-<ID>` com `service died`** → o fix-runner é despachado com o ID do item com falha (a execução foi abortada no meio, então `failed_set` pode ser parcial; inclua o item abortado mais tudo que estiver explicitamente FAIL ou BLOCKED no relatório parcial).
-- **O evaluator não retorna nenhum item** (clean e zero itens, ex.: contrato com superfícies vazias) → o evaluator já deveria ter abortado por contrato malformado; se não abortou, trate como `success` (verdade vacuosa) e registre o soft-fail "evaluator returned zero items; verify contract has any items".
+- **O evaluator não retorna nenhum item** (clean e zero itens, ex.: contrato com superfícies vazias) → o evaluator já deveria ter abortado por contrato malformado; se não abortou, trate como `success` (verdade vacuosa) e registre o soft-fail "o evaluator não retornou nenhum item; confira se o contrato tem itens".
 - **`prd_progress.json` fora do repositório ou ignorado pelo git** → os commits de artefatos dos Steps 7.2 e 7.6 seguem sem ele; registre o soft-fail. Sem o arquivo versionado, ele também não entra em conflito no Step 7.4.
 - **Conflito no `prd_progress.json` com um dos lados sem parse** → a resolução mecânica do Step 7.4 não é possível; terminal `pr-blocked`.
 - **Um hook de commit recusa o commit de artefatos (Step 7.2 ou 7.6)** → não contorne; cancele a criação do PR e finalize com `success` mais o aviso no chat report. Se a falha foi no 7.6, o Step 8.4 não tenta de novo e o Final Verdict já gravado fica sem commit.

@@ -258,6 +258,8 @@ git worktree add -b feat/F<ID>-<slug> .claude/worktrees/F<ID>-<slug> <default-br
 
 Descubra a branch padrão conforme a seção 4 de `${CLAUDE_PLUGIN_ROOT}/references/forge.md` (`git symbolic-ref --short refs/remotes/origin/HEAD`, sem o prefixo `origin/`; fallback `git remote show origin`) e guarde em cache para o resto da execução. Isso é git puro e não depende do forge. Se os dois comandos falharem, aborte a wave — sem branch padrão não há base de onde criar as worktrees.
 
+> **A branch da equipe nasce aqui, e só aqui.** O `/implement-and-evaluate` de cada equipe tem um Step 2.5 que garante a branch de trabalho quando a execução começa na branch padrão — mas dentro da worktree a branch atual já é `feat/F<ID>-<slug>`, diferente da padrão, então aquele step é **no-op por construção**. É o comportamento correto: não "conserte" isso criando branch dentro da worktree, e não remova o `-b` daqui na suposição de que a equipe cria a própria branch. Os dois lados montam o nome a partir do **nome da pasta da feature verbatim** (`F03-video-upload` → `feat/F03-video-upload`), justamente para que as duas portas de entrada nunca produzam branches diferentes para a mesma feature.
+
 **4.2 — Crie a sessão tmux e a janela do dashboard**:
 
 ```

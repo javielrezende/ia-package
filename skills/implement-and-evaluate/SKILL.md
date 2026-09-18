@@ -1,6 +1,6 @@
 ---
 name: implement-and-evaluate
-description: Orquestra `implement-feature` + `evaluator` + `fix-runner` num loop de verificação e retry. Roda o implementador uma vez e depois alterna o evaluator (veredito canônico) com o fix-runner (passada corretiva) até o contrato ser honrado, o retry budget se esgotar ou o circuit-breaker disparar. Persiste um journal por execução documentando cada ciclo e apontando para os eval-reports. Com o override `with design review`, roda também a skill `design-review` entre o veredito limpo e o PR, corrigindo achados de UI pelo `fix-runner` Mode C. No sucesso, commita os artefatos de avaliação, integra a branch padrão, faz push e abre o PR.
+description: Orquestra `implement-feature` + `evaluator` + `fix-runner` num loop de verificação e retry. Garante a branch de trabalho da feature antes do primeiro commit, quando a execução começa na branch padrão. Roda o implementador uma vez e depois alterna o evaluator (veredito canônico) com o fix-runner (passada corretiva) até o contrato ser honrado, o retry budget se esgotar ou o circuit-breaker disparar. Persiste um journal por execução documentando cada ciclo e apontando para os eval-reports. Com o override `with design review`, roda também a skill `design-review` entre o veredito limpo e o PR, corrigindo achados de UI pelo `fix-runner` Mode C. No sucesso, commita os artefatos de avaliação, integra a branch padrão, faz push e abre o PR.
 ---
 
 # Implement and Evaluate
@@ -17,7 +17,7 @@ Com o override `with design review`, uma quarta skill entra no fluxo — **`desi
 
 As skills são do plugin `ia-package` e são invocadas pelo nome com namespace: `ia-package:implement-feature`, `ia-package:evaluator`, `ia-package:fix-runner`, `ia-package:design-review`.
 
-Somente leitura sobre o projeto, exceto pelo arquivo de journal, pelo lockfile, pela entrada da target feature no `prd_progress.json` e pelos commits dos Steps 7 e 8 descritos abaixo. Nunca modifica código, contratos, specs ou plans. Push e abertura de PR acontecem APENAS no Step 7 (fluxo de criação do PR), e só quando o loop chegou a `success` e a branch atual não é a branch padrão do projeto. Os commits do orquestrador são: os commits de artefatos de avaliação (Steps 7.2 e 7.6), o merge commit quando o único arquivo em conflito era o `prd_progress.json` (Step 7.4) e o commit dos artefatos restantes no Step 8.4, que só acontece quando o fluxo do PR já fez o commit do Step 7.2 e parou antes do Step 7.6.
+Somente leitura sobre o projeto, exceto pelo arquivo de journal, pelo lockfile, pela entrada da target feature no `prd_progress.json`, pela criação da branch de trabalho no Step 2.5 e pelos commits dos Steps 7 e 8 descritos abaixo. Nunca modifica código, contratos, specs ou plans. Push e abertura de PR acontecem APENAS no Step 7 (fluxo de criação do PR), e só quando o loop chegou a `success` e a branch atual não é a branch padrão do projeto. Os commits do orquestrador são: os commits de artefatos de avaliação (Steps 7.2 e 7.6), o merge commit quando o único arquivo em conflito era o `prd_progress.json` (Step 7.4) e o commit dos artefatos restantes no Step 8.4, que só acontece quando o fluxo do PR já fez o commit do Step 7.2 e parou antes do Step 7.6.
 
 ## INPUT
 
@@ -28,7 +28,7 @@ Free-form. Mesma resolução do `implement-feature` e do `evaluator`. Formatos a
 - Arquivo dentro da pasta da feature (`docs/F03-video-upload/contract.md`).
 - Nome da feature em kebab-case ou fuzzy (`video upload`, `Video Upload`).
 
-Overrides opcionais em linguagem natural, em qualquer lugar do input. Oito são interpretados pelo orquestrador; o resto é repassado ao `implement-feature` no ciclo 0.
+Overrides opcionais em linguagem natural, em qualquer lugar do input. Nove são interpretados pelo orquestrador; o resto é repassado ao `implement-feature` no ciclo 0.
 
 | Override | Efeito |
 |---|---|
@@ -40,6 +40,7 @@ Overrides opcionais em linguagem natural, em qualquer lugar do input. Oito são 
 | `with design review` | Liga o **Step 6.5**: depois do `clean` do evaluator, roda a skill `design-review` e, se ela reprovar, alterna `fix-runner` (Mode C) + `design-review` dentro de um budget próprio (default 2, ajustável com `max <N> design passes`). Sem este override o Step 6.5 não roda e nada muda. |
 | `max <N> design passes` | Budget do loop de design do Step 6.5 (default 2). Só tem efeito junto de `with design review`. |
 | `progress-path=<path>` | Path para o `prd_progress.json` do projeto. Repassado a toda invocação de sub-skill, para que as três (`implement-feature`, `evaluator`, `fix-runner`) gravem no mesmo arquivo. Se omitido, cada sub-skill descobre o arquivo de forma independente. Veja **PROGRESS TRACKING**. |
+| `no branch` | Pula o **Step 2.5**: a execução fica na branch atual, seja ela qual for — inclusive a branch padrão do projeto. Para quem quer rodar deliberadamente onde está. Rodando na branch padrão com este override, o Step 7.1 cancela a criação do PR/MR como sempre fez. |
 
 Qualquer outra coisa reconhecida no input original é repassada literalmente ao prompt de invocação do `implement-feature` no ciclo 0 (ex.: `pause between phases`, `skip lint`, `stub OpenAI`, `only phases 1 and 2`). O orquestrador NÃO repassa overrides ao evaluator (exceto `keep env`, conforme acima) nem ao fix-runner — os dois rodam com seus defaults, para que o veredito e a passada corretiva fiquem reproduzíveis.
 
@@ -70,13 +71,17 @@ Nenhum código é escrito pelo orquestrador. As três skills delegadas produzem 
 
 Faça o parsing do input como free-form. Identifique a referência da feature e aplique a extração de overrides descrita em **INPUT**:
 
-- Reconheça os oito overrides de nível de orquestrador; registre o efeito de cada um.
+- Reconheça os nove overrides de nível de orquestrador; registre o efeito de cada um.
 - Remova-os da string de input.
 - O que sobrar vira o **`tail`**, acrescentado literalmente à invocação do `implement-feature` no ciclo 0.
 
 Resolva a referência da feature para uma pasta contendo `spec.md` + `plan.md` + `contract.md`. Calcule `<feature-id>` como o segmento inicial `F<N>` do nome da pasta (em minúsculas, apenas alfanuméricos — a mesma definição de marcador que o evaluator usa).
 
 Determine `<run-id>` = timestamp ISO 8601 normalizado para ser seguro em nome de arquivo (ex.: `2026-05-01T17-32-04Z`). A mesma string é usada no nome do arquivo de journal, na linha `**Run:**` do journal e em qualquer referência que o orquestrador emita sobre a execução.
+
+**Resolva a branch padrão do projeto** conforme a seção 4 de `${CLAUDE_PLUGIN_ROOT}/references/forge.md` (`git symbolic-ref --short refs/remotes/origin/HEAD`, sem o prefixo `origin/`; fallback `git remote show origin`) e guarde em cache para o resto da execução. Isso é git puro e não depende do forge — não confunda com a resolução do forge em si, que continua no Step 7.0. A resolução acontece aqui, e não no Step 7, porque o **Step 2.5** precisa dela antes do primeiro ciclo.
+
+Se os dois comandos falharem (clone sem `origin/HEAD` local, sem remote, sem rede), NÃO aborte: registre o soft-fail `"branch padrão desconhecida; Step 2.5 pulado"` e trate a branch padrão como desconhecida pelo resto da execução. O Step 2.5 vira no-op, a execução segue na branch atual e o Step 7.1 não tem o que comparar — exatamente o comportamento anterior a esta regra.
 
 **Checagem de estado pré-execução (best-effort).** Localize o `prd_progress.json` conforme **PROGRESS TRACKING**. Quando o arquivo existir e a entrada da target feature estiver acessível, inspecione o `status` atual e emita no chat um aviso de uma linha para os quatro estados abaixo antes de prosseguir. NÃO aborte; NÃO pergunte — o orquestrador continua autônomo. O aviso expõe o estado para ciência humana; a execução segue normalmente e as sub-skills sobrescrevem o status conforme seus próprios contratos. Quando o arquivo não estiver acessível (ausente, sem parse, feature ID ausente), pule em silêncio — a checagem pré-execução não pode bloquear a execução.
 
@@ -111,9 +116,41 @@ O lockfile do orquestrador fica em `<feature-folder>/.orchestrate.lock`. É um a
 
 **Liberação do lock:** apague o arquivo no final da execução (Step 8) ou em qualquer caminho de abort. A liberação é idempotente — tenha sucesso em silêncio se o arquivo já não existir. O lockfile nunca entra em commit.
 
+### Step 2.5 — Ensure a feature branch
+
+O loop inteiro commita: o `implement-feature` faz um commit por fase, o `fix-runner` um commit por ciclo e o orquestrador commita os artefatos de avaliação no Step 7. Invocado a partir da branch padrão, tudo isso cai direto nela — e o Step 7.1 só descobre que não há PR a abrir depois de todos os ciclos. Este step existe para que a branch de trabalho nasça **antes do primeiro commit**, não depois do último.
+
+Pule o step inteiro, registrando o motivo em `Overrides applied`, em dois casos:
+
+- **Override `no branch`** — a execução fica na branch atual, seja ela qual for.
+- **Branch padrão desconhecida** (as duas tentativas do Step 1 falharam) — sem ela não há com o que comparar. O soft-fail já foi registrado no Step 1; não registre de novo.
+
+**2.5.1 — Compare.** `git branch --show-current`. Se a branch atual **não** for a branch padrão em cache, o step é no-op: registre `branch: <atual> (já é branch de trabalho)` em `Overrides applied` e vá para o Step 3. É o caso de toda equipe do `implement-and-evaluate-tmux`, que já roda dentro de uma worktree na branch `feat/F<ID>-<slug>`.
+
+**2.5.2 — Monte o nome da branch.** `feat/<nome da pasta da feature>`, com o nome da pasta **verbatim**, sem normalizar caixa: `docs/F03-video-upload/` → `feat/F03-video-upload`.
+
+> ⚠️ **Nunca monte a branch a partir do `<feature-id>` do Step 1.** Aquele valor é minúsculo por definição (`f03`) — é o marcador de nome de arquivo do evaluator, não um nome de branch. Usá-lo produziria `feat/f03-video-upload`, enquanto o `implement-and-evaluate-tmux` cria `feat/F03-video-upload` a partir do mesmo nome de pasta (Step 4.1 dele). Seriam duas branches distintas para a mesma feature, e a checagem de colisão de branch do tmux (Step 2.3b) não pegaria nenhuma delas.
+
+**2.5.3 — Checkout.** A branch pode já existir — re-rodar depois de um `exhausted` ou `stuck` é caso normal de uso, não exceção:
+
+```bash
+git rev-parse --verify --quiet feat/<pasta>
+```
+
+- **Não existe** → `git checkout -b feat/<pasta>`.
+- **Existe** → `git checkout feat/<pasta>`. Os commits desta execução se empilham sobre os da anterior; é o comportamento desejado.
+- **Existe e está em checkout numa worktree** → o `git checkout` falha com `fatal: 'feat/<pasta>' is already checked out at <path>`. **Aborte** com status `aborted` e a mensagem: `"a branch feat/<pasta> já está em checkout na worktree <path> — provavelmente uma wave do implement-and-evaluate-tmux está rodando esta feature. Rode a partir daquela worktree, ou espere a wave terminar."` O lockfile do Step 2 não cobre este caso: cada worktree tem a sua cópia da pasta da feature e, portanto, o seu próprio `.orchestrate.lock`.
+- **Qualquer outra falha do git** → soft-fail nomeando o erro; siga na branch atual. O Step 7.1 continua sendo a rede de segurança.
+
+Registre o resultado em `Overrides applied` do journal: `branch: feat/<pasta> (criada)` ou `branch: feat/<pasta> (existente)`.
+
+> Mudanças não commitadas acompanham o `git checkout -b` para a branch nova. É o comportamento desejado — sem este step elas acabariam na branch padrão. Como todas as skills do pipeline fazem stage por path explícito, arquivo sujo não relacionado continua sujo e fora dos commits.
+
 ### Step 3 — Initialize journal
 
 Grave `<feature-folder>/orchestration-<run-id>.md` a partir do template em `references/journal-template.md`. Preencha o header (run-id, branch, feature ID, started-at, retry budget, overrides aplicados/ignorados). Deixe a tabela de ciclos e o bloco de veredito final vazios — eles são preenchidos conforme os ciclos terminam.
+
+A linha `**Branch:**` recebe a branch **de trabalho** — a que o Step 2.5 deixou em checkout, não a branch de onde a execução foi invocada. É por isso que este step vem depois do 2.5: um journal que registra `main` numa execução cujos commits foram todos para `feat/F03-video-upload` é um registro errado.
 
 O orquestrador atualiza o journal **depois de cada ciclo**, para que um journal parcial seja informativo se a execução for interrompida (Ctrl-C, crash etc.).
 
@@ -379,7 +416,17 @@ Disparado exclusivamente quando o Step 6 calculou `success`. Objetivo: abrir um 
 
 **7.0 — Resolver o forge.** Resolva o forge do projeto (`github` | `gitlab`) e faça a pré-checagem do CLI conforme `${CLAUDE_PLUGIN_ROOT}/references/forge.md` (seções 1 e 2) — esse arquivo é canônico para as seis operações de forge deste step; não improvise comandos de CLI. Guarde o forge resolvido em cache para o resto da execução e registre-o em `Overrides applied` no journal, com a origem da resolução (`CLAUDE.md` | `remote` | `default`). Se o CLI estiver ausente ou não autenticado, NÃO aborte: registre o soft-fail com a dica de instalação e siga os steps 7.2 a 7.7 normalmente — os artefatos, o merge e o push valem por si. Só os steps 7.8 e 7.9 são pulados, com o comando manual impresso no chat report.
 
-**7.1 — Safety check.** Determine a branch padrão do projeto conforme a seção 4 de `references/forge.md` (`git symbolic-ref --short refs/remotes/origin/HEAD`, sem o prefixo `origin/`; fallback `git remote show origin`) e guarde em cache. Isso é git puro, não depende do forge. Se a branch atual (`git branch --show-current`) for igual à branch padrão, cancele a criação do PR/MR e finalize com status `success` mais um aviso no chat report: `"Cannot open PR from default branch <main> to itself. Re-invoke from a feature branch if you want a PR."`. O trabalho em si está feito; só o passo do PR/MR é pulado. Nenhum commit de artefatos é feito neste caso. Se os dois comandos falharem e a branch padrão ficar desconhecida, registre soft-fail e siga — sem a comparação, o safety check não tem o que bloquear, e um PR/MR aberto a partir da branch padrão falha depois no 7.9, de novo como soft-fail.
+**7.1 — Safety check (segunda linha de defesa).** A branch padrão já foi resolvida e cacheada no Step 1, e o Step 2.5 já deveria ter garantido uma branch de trabalho antes do ciclo 0. Este check cobre os casos em que isso não aconteceu: a resolução da branch padrão falhou, o override `no branch` estava ligado, o Step 2.5 caiu em soft-fail, ou o usuário trocou de branch no meio da execução.
+
+Se a branch atual (`git branch --show-current`) for igual à branch padrão em cache, cancele a criação do PR/MR e finalize com status `success` mais um aviso no chat report **nomeando o motivo real**:
+
+| Motivo | Aviso |
+|---|---|
+| `no branch` ativo | `"PR/MR não aberto: o override 'no branch' manteve a execução na branch padrão <main>. Crie uma branch e re-invoque, ou abra o PR/MR à mão."` |
+| Step 2.5 pulado ou em soft-fail | `"PR/MR não aberto: a branch de trabalho não pôde ser criada no Step 2.5 (<motivo>) e a execução ficou na branch padrão <main>."` |
+| Branch trocada no meio da execução | `"PR/MR não aberto: a branch atual é a branch padrão <main>; não há de onde abrir o PR/MR."` |
+
+O trabalho em si está feito; só o passo do PR/MR é pulado. Nenhum commit de artefatos é feito neste caso. Se a branch padrão ficou desconhecida no Step 1, registre soft-fail e siga — sem a comparação, o safety check não tem o que bloquear, e um PR/MR aberto a partir da branch padrão falha depois no 7.9, de novo como soft-fail.
 
 **7.2 — Commit evaluation artifacts.** Antes do merge, versione os artefatos que esta execução produziu. Isso deixa o `prd_progress.json` sem mudanças pendentes (senão o `git merge` do 7.3 pode ser recusado) e garante que os paths citados no corpo do PR existam no PR.
 
@@ -578,7 +625,7 @@ implement-and-evaluate — F<ID> <Feature Name>
 
 Status: success | manual-pending | stuck | exhausted | aborted | pr-blocked
 Cycles: <N> (1 implement + <N-1> fix)
-Branch: <git branch>
+Branch: <branch de trabalho da execução>
 Run: <run-id>
 
 Cycle log:
@@ -688,6 +735,8 @@ A anotação do orquestrador serve à clareza forense do JSON. O journal em `<fe
 - Resolva a referência da feature com as mesmas regras do `implement-feature` e do `evaluator`.
 - Rode a checagem de estado pré-execução do Step 1 contra o `prd_progress.json` (best-effort): emita o aviso de uma linha documentado quando o `status` atual da target feature for `done`, `pr-blocked`, `removed` ou `implementing`. Nunca aborte nem pergunte por causa do aviso — o orquestrador continua autônomo e deixa as sub-skills sobrescreverem conforme seus próprios contratos.
 - Adquira `<feature-folder>/.orchestrate.lock` com checagem de PID vivo antes de despachar qualquer subagente.
+- Resolva a branch padrão do projeto no Step 1 (git puro, seção 4 de `references/forge.md`) e guarde em cache — o Step 2.5 e o Step 7.1 leem esse cache; nenhum dos dois resolve de novo.
+- Garanta a branch de trabalho no Step 2.5, antes de despachar o ciclo 0: com a branch padrão em checkout, crie ou entre em `feat/<nome da pasta da feature>` — nome da pasta **verbatim**, nunca o `<feature-id>` minúsculo. Pule o step com o override `no branch`, com a branch padrão desconhecida, ou quando a branch atual já não for a padrão.
 - Inicialize e atualize continuamente `<feature-folder>/orchestration-<run-id>.md` conforme `references/journal-template.md`.
 - Delegue as sub-skills a subagentes `general-purpose` novos — um subagente por invocação de skill, uma invocação de skill por subagente. Nunca invoque as skills inline. Invoque-as pelo nome com namespace (`ia-package:implement-feature`, `ia-package:evaluator`, `ia-package:fix-runner`, `ia-package:design-review`).
 - Exija retornos JSON estruturados de cada subagente, para que o orquestrador nunca precise fazer parsing de markdown.
@@ -706,14 +755,15 @@ A anotação do orquestrador serve à clareza forense do JSON. O journal em `<fe
 
 **Nunca:**
 
-- Edite código, contratos, specs, plans, eval-reports ou qualquer `orchestration-*.md` anterior. Somente leitura sobre o projeto, exceto pelo journal da execução atual, pelo lockfile, pelas escritas no `prd_progress.json` descritas em **PROGRESS TRACKING** e pelos commits dos Steps 7 e 8.4.
+- Edite código, contratos, specs, plans, eval-reports ou qualquer `orchestration-*.md` anterior. Somente leitura sobre o projeto, exceto pelo journal da execução atual, pelo lockfile, pelas escritas no `prd_progress.json` descritas em **PROGRESS TRACKING**, pela criação da branch de trabalho no Step 2.5 e pelos commits dos Steps 7 e 8.4.
 - Grave `status` no `prd_progress.json` fora dos casos `exhausted` / `stuck` / `aborted` (sempre `fail`) e `pr-blocked`. O status é, de resto, das sub-skills (`implement-feature` / `evaluator` / `fix-runner`).
 - Commite fora dos Steps 7 e 8.4, ou faça push ou abra PRs fora do Step 7. Nenhum commit do orquestrador e nenhum push durante o loop de verificação; nenhum push no Step 8; nenhum PR aberto em `manual-pending` / `stuck` / `exhausted` / `aborted` / `pr-blocked`.
 - Faça commit no Step 8.4 com um merge em andamento (`.git/MERGE_HEAD` presente) — liste os paths no chat report em vez disso.
 - Faça stage do `.orchestrate.lock`, de relatórios ou journals de outras execuções, ou use `git add -A` / `git add .`.
 - Pule git hooks (`--no-verify`).
 - Faça force-push (`git push --force` ou `--force-with-lease`). O Step 7 usa apenas `git push` simples — a abordagem de merge foi escolhida justamente para evitar reescritas de histórico que exigiriam force-push.
-- Abra um PR da branch padrão do projeto para ela mesma. O safety check do Step 7 cancela a criação do PR quando a branch atual é a branch padrão.
+- Abra um PR da branch padrão do projeto para ela mesma. O Step 2.5 é a primeira defesa (a execução sai da branch padrão antes do primeiro commit) e o safety check do Step 7.1 é a segunda, cancelando a criação do PR/MR quando a branch atual ainda for a padrão.
+- Crie branch fora do Step 2.5, apague ou renomeie qualquer branch, ou troque de branch entre os ciclos. O Step 2.5 é a única escrita do orquestrador sobre o estado de branch do repositório, e acontece uma vez, antes do ciclo 0.
 - Modifique qualquer entrada de feature no `prd_progress.json` além da entrada da target feature, ou os campos de primeiro nível, fora da resolução de conflito do Step 7.4.
 - Pule a checagem do lockfile. Execuções concorrentes na mesma feature são inseguras, e o lockfile é o seguro barato.
 - Repasse overrides de nível de orquestrador ao implementador (eles são consumidos pelo orquestrador). Repasse overrides que não são do orquestrador ao evaluator ou ao fix-runner — eles têm suas próprias gramáticas de override e o orquestrador não traduz. A única exceção é `progress-path=<path>`: embora seja de nível de orquestrador, ele É repassado literalmente às três sub-skills, para que todas gravem no mesmo `prd_progress.json` (conforme **PROGRESS TRACKING**).
@@ -736,6 +786,7 @@ A anotação do orquestrador serve à clareza forense do JSON. O journal em `<fe
 | `progress-path=<path>` | Path do `prd_progress.json`; repassado literalmente às três sub-skills. | auto-descoberta |
 | `with design review` | Liga o Step 6.5 (design-review + fix-runner Mode C) entre o `success` e a criação do PR. | off |
 | `max <N> design passes` | Budget do loop do Step 6.5. Só tem efeito com `with design review`. | 2 |
+| `no branch` | Pula o Step 2.5; a execução fica na branch atual, seja ela qual for. Na branch padrão, isso significa commits direto nela e nenhum PR/MR no fim. | off (o Step 2.5 roda) |
 
 Qualquer outra coisa reconhecida na string de input é **repassada literalmente** à invocação do `implement-feature` no ciclo 0 como parte do seu `tail`. O orquestrador não interpreta esses overrides; o implementador interpreta. Exemplos que são repassados:
 
@@ -773,7 +824,10 @@ Texto não reconhecido fica no `tail`. Se o implementador o ignorar, isso é pro
 - **`pause between cycles` e o usuário digita algo diferente dos tokens de retomada reconhecidos** → o orquestrador interpreta o texto como overrides adicionais para o *próximo* ciclo de fix e o acrescenta ao prompt do próximo subagente. (Ex.: o usuário digita `skip tests` entre os ciclos 1 e 2; isso vai para o prompt do fix-runner do ciclo 2.)
 - **`keep eval env` numa execução `success`** → ignorado (não há ambiente com falha para manter). Registrado em `Overrides ignored` no chat report.
 - **Execução interrompida (Ctrl-C, reboot da máquina)** → o lockfile fica para trás; o journal parcial fica como está. A próxima invocação detecta o lockfile obsoleto pela checagem de PID vivo, sobrescreve-o e começa com um novo run-id (não retoma).
-- **Branch trocada no meio da execução** (`git checkout` entre ciclos) → todos os commits e o novo run-id ficam presos à branch em que o orquestrador começou; trocar de branch no meio da execução é comportamento indefinido e o orquestrador não detecta. Comportamento documentado: não troque de branch entre ciclos.
+- **Branch trocada no meio da execução** (`git checkout` entre ciclos) → todos os commits e o novo run-id ficam presos à branch em que o orquestrador começou; trocar de branch no meio da execução é comportamento indefinido e o orquestrador não detecta. Comportamento documentado: não troque de branch entre ciclos. Se a troca levar de volta à branch padrão, o Step 7.1 pega e cancela o PR/MR.
+- **A branch `feat/<pasta>` já existe quando o Step 2.5 roda** → `git checkout` nela, não `git checkout -b` (que falha com `fatal: a branch named 'feat/<pasta>' already exists`). Re-rodar depois de um `exhausted` ou `stuck` é o caso normal de uso, e os commits da nova execução devem mesmo se empilhar sobre os da anterior.
+- **A branch `feat/<pasta>` está em checkout numa worktree** (uma wave do `implement-and-evaluate-tmux` está rodando esta feature enquanto o usuário dispara `/implement-and-evaluate F<ID>` do checkout principal) → o `git checkout` falha com `fatal: '<branch>' is already checked out at <path>`. Abort explícito no Step 2.5, citando o path da worktree. O lockfile do Step 2 não pega este caso, porque cada worktree carrega a sua própria cópia da pasta da feature — e, portanto, o seu próprio `.orchestrate.lock`.
+- **Execução na branch padrão com `no branch`** → o Step 2.5 é pulado, os commits de fase e de fix caem na branch padrão e o Step 7.1 cancela o PR/MR nomeando o override. É o comportamento pedido pelo override; o aviso existe para que ninguém o confunda com uma falha.
 - **A feature já está em estado clean quando invocada** (implementador diz que todas as fases estão commitadas, evaluator diz clean) → terminal `success` depois de um ciclo. O journal registra "0 phases newly committed; 0 fix cycles".
 - **O `tail` do implementador contém um token de nível de orquestrador** (ex.: `max 5 retries` aparece no input do usuário, mas o orquestrador deixou passar) → o implementador vai vê-lo e não vai interpretá-lo como do orquestrador, já que `max N retries` também está na gramática do implementador (é o retry de hard-fail do implementador, não o do orquestrador). Essa dupla contagem é aceitável — o implementador a aplica dentro do seu loop de hard-fail; o orquestrador já extraiu sua própria cópia no Step 1.
 - **Evaluator retorna `aborted-at-item-<ID>` com `service died`** → o fix-runner é despachado com o ID do item com falha (a execução foi abortada no meio, então `failed_set` pode ser parcial; inclua o item abortado mais tudo que estiver explicitamente FAIL ou BLOCKED no relatório parcial).

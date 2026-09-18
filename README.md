@@ -59,6 +59,13 @@ O `contract.md` é a peça que sustenta o loop: itens Given/When/Then por superf
 critério de aceite do PRD aos itens que o cobrem. Quem implementa usa como checklist;
 o `evaluator` usa como asserção.
 
+O `prd_progress.json` é o outro artefato compartilhado do loop: o
+`prd-writer-for-complete-project` o cria a partir do `Appendix A`, e as cinco skills de
+execução leem e escrevem nele ao longo dos ciclos. O schema — chaves, valores de
+`status`, semântica dos campos e invariantes — vive em `references/progress-schema.md`,
+na raiz do plugin. É a fonte canônica; cada skill documenta apenas as próprias escritas
+e aponta para lá.
+
 O `design-review` é o eixo ortogonal: o `evaluator` responde *a feature faz o que
 prometeu?*, o `design-review` responde *a feature está apresentável?*. Nenhum bullet
 Given/When/Then captura "isso parece um template scaffoldado" — por isso a avaliação
@@ -261,7 +268,9 @@ as perguntas interativas (`"Posso prosseguir? (sim/não)"`), os aborts
 
 O `contract.md` tem a sua própria versão dessa regra — conteúdo em pt-BR, âncoras
 estruturais e vocabulário de capability em inglês —, canônica em
-`skills/spec-writer/references/contract-template.md`.
+`skills/spec-writer/references/contract-template.md`. O `prd_progress.json` fica inteiro
+do lado que carrega peso: chaves, nomes de campo e valores de `status` são literais de
+schema, definidos em `references/progress-schema.md`.
 
 ## Desenvolvimento local
 

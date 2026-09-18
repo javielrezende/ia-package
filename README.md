@@ -51,7 +51,7 @@ com export opcional em JSON:
 
 | Skill | Faz |
 |---|---|
-| `implement-and-evaluate` | Uma feature: implementa → avalia → corrige → reavalia até o contrato ser honrado, o retry budget acabar ou o circuit-breaker disparar. Com `with design review`, roda também um loop de design antes do PR. No sucesso, commita os artefatos de avaliação, integra a branch padrão, faz push e abre o PR |
+| `implement-and-evaluate` | Uma feature: cria a branch de trabalho se a execução começar na branch padrão, implementa → avalia → corrige → reavalia até o contrato ser honrado, o retry budget acabar ou o circuit-breaker disparar. Com `with design review`, roda também um loop de design antes do PR. No sucesso, commita os artefatos de avaliação, integra a branch padrão, faz push e abre o PR |
 | `implement-and-evaluate-tmux` | Uma wave inteira em paralelo: um worktree git e uma janela tmux por feature, cada uma rodando `implement-and-evaluate` por conta própria. A sessão Main só despacha, espera e consolida |
 
 O `contract.md` é a peça que sustenta o loop: itens Given/When/Then por superfície
@@ -97,6 +97,35 @@ Rodam sozinhos, sem invocação. Ficam em silêncio quando não têm nada a dize
 Os dois primeiros são hooks de comando (bash + python3, sem dependências externas);
 o terceiro é um hook `prompt`, avaliado por um modelo. Exigem apenas `bash` e `python3`
 no PATH — se `python3` faltar, os scripts saem em silêncio em vez de quebrar a sessão.
+
+## A branch de trabalho
+
+O `implement-and-evaluate` commita muito: um commit por fase do `implement-feature`,
+um por ciclo do `fix-runner` e os artefatos de avaliação no fim. Invocado a partir da
+branch padrão, tudo isso cairia direto nela — e o passo do PR só descobriria que não
+há de onde abrir depois de todos os ciclos.
+
+Por isso o orquestrador **garante a branch antes do primeiro commit** (Step 2.5): se
+a branch em checkout for a padrão, ele entra em `feat/<nome da pasta da feature>` —
+criando se não existir, reusando se existir, porque re-rodar depois de um `exhausted`
+é caso normal de uso. O nome sai da pasta **verbatim**: `docs/F03-video-upload/` →
+`feat/F03-video-upload`, exatamente o nome que o `implement-and-evaluate-tmux` dá à
+branch da worktree, para que as duas portas de entrada nunca produzam branches
+diferentes para a mesma feature.
+
+Fora da branch padrão o step é no-op — inclusive dentro de cada worktree da wave, que
+já nasce na branch da feature. Se a branch já estiver em checkout numa worktree, a
+execução aborta citando o path, em vez de disputar a branch com a wave que está
+rodando.
+
+Para ficar deliberadamente onde está, use o override `no branch`:
+
+```
+/implement-and-evaluate F03 no branch
+```
+
+Rodando assim a partir da branch padrão, o PR não é aberto — e o aviso no relatório
+final diz exatamente isso, em vez de só constatar que a branch é a padrão.
 
 ## Forge: GitHub ou GitLab
 

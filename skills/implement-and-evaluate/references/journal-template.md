@@ -19,7 +19,7 @@ Listas sem entradas colapsam para uma única linha em itálico `*(none)*`.
 
 **Run:** `<ISO-timestamp>`
 **Feature folder:** `<pasta da feature>`
-**Branch:** `<branch do git no início>`
+**Branch:** `<branch de trabalho da execução>`
 **Started at:** `<ISO-8601 wall clock>`
 **Retry budget:** `<N>` (default 3 · `unlimited` · `0` para no-retries)
 **Status:** `running | success | manual-pending | stuck | exhausted | aborted | pr-blocked`
@@ -196,6 +196,7 @@ Um bloco por ciclo, em ordem cronológica. Cada bloco carrega os dados que a lin
 
 ## Notes for the writer
 
+- **Linha `**Branch:**`**: é a branch de *trabalho* da execução — a que o Step 2.5 do orquestrador deixou em checkout, não a branch de onde a execução foi invocada. Quando o Step 2.5 cria `feat/F03-video-upload` a partir da `main`, o journal registra `feat/F03-video-upload`. O header é gravado no Step 3, **depois** do Step 2.5, justamente para que essa linha nunca guarde a branch errada.
 - **Formato do run-id**: ISO 8601 normalizado para forma segura em nome de arquivo, ex.: `2026-05-01T17-32-04Z`. A mesma string aparece no nome do arquivo, na linha `**Run:**` e em toda referência a esta execução. O orquestrador nunca reutiliza um run-id.
 - **Escritas incrementais**: grave o header no Step 3 (inicialização). Depois de cada ciclo, acrescente a nova linha na tabela **Cycle Log** e um novo bloco em **Cycle Detail**. O **Final Verdict** e os **Soft-fails** de nível de execução são preenchidos no Step 7.6 quando o status é `success` e o fluxo de PR chega até lá (antes do último commit de artefatos e do push); em todos os outros caminhos, no Step 8. A seção **keep eval env** é preenchida no Step 8, quando aplicável.
 - **Cálculo dos deltas**: os deltas do bloco **Cycle Detail** são calculados contra a saída do evaluator do ciclo **anterior** (conjuntos de IDs de itens), não contra o ciclo 0, a menos que o anterior seja o ciclo 0. Os grupos "still failing" e "new failures" juntos precisam ser iguais ao `failed_set ∪ blocked_set` do ciclo atual.

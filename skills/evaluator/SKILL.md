@@ -91,7 +91,7 @@ Antes de levantar qualquer coisa, procure recursos órfãos de execuções anter
 
 **Definição do marcador (fixa).** `<feature-id>` é o segmento inicial `F<N>` do nome da pasta da feature, em minúsculas e sem caracteres não alfanuméricos (ex.: pasta `F03-video-upload` → `f03`). A skill PRECISA usar exatamente essa forma em todo marcador — nome do DB, path do tmpdir, path do lockfile, referências no relatório — para que a limpeza dê match byte a byte com a criação entre execuções.
 
-**Segurança contra execuções concorrentes.** Antes de remover qualquer coisa, examine os arquivos `processes.lock` candidatos em busca de PIDs vivos (qualquer PID listado que responda a um sinal `kill -0` está vivo). **Se algum lockfile candidato tiver ao menos um PID vivo, aborte a nova execução** com uma mensagem no formato: `concurrent evaluator run detected for <feature-id>: PID <N> alive in <lockfile>. Wait for it to finish or stop it, then re-run.` NÃO remova esse lockfile, seu tmpdir, nem qualquer DB associado ao seu run-id — a execução viva é dona deles.
+**Segurança contra execuções concorrentes.** Antes de remover qualquer coisa, examine os arquivos `processes.lock` candidatos em busca de PIDs vivos (qualquer PID listado que responda a um sinal `kill -0` está vivo). **Se algum lockfile candidato tiver ao menos um PID vivo, aborte a nova execução** com uma mensagem no formato: `já existe uma execução do evaluator para <feature-id>: PID <N> vivo em <lockfile>. Espere terminar ou encerre-a, e re-rode.` NÃO remova esse lockfile, seu tmpdir, nem qualquer DB associado ao seu run-id — a execução viva é dona deles.
 
 Depois que a checagem de segurança passar:
 
@@ -242,7 +242,7 @@ Grave o relatório em arquivo seguindo `references/report-template.md` (carregue
 
 **Insight defensivo (apenas informativo).** Se ≥ 80 % dos itens *executados* (o denominador exclui `BLOCKED`, `MANUAL` e `SKIPPED`) falharem com o mesmo padrão de causa raiz (ex.: 404 em todo item HTTP, "ENOENT" em todo acesso a fixture), adicione uma única linha ao header do chat:
 
-> Note: most items fail with `<pattern>`; implementation may not be in place.
+> Nota: a maioria dos itens falha com `<pattern>`; a implementação pode não estar no lugar.
 
 As marcas continuam honestas; a linha não muda nenhum veredito.
 
@@ -258,7 +258,7 @@ Esta skill grava o veredito canônico da target feature num arquivo compartilhad
 2. Procure a partir da pasta da feature resolvida no Step 1 para cima (máximo 4 níveis) pelo `prd_progress.json` mais próximo. O `prd-writer-for-complete-project` grava o arquivo ao lado do PRD por padrão, e as pastas de feature ficam ao lado do PRD (ex.: `docs/F03-video-upload/` → `docs/prd_progress.json`).
 3. Procure a partir do CWD para cima (máximo 4 níveis) pelo `prd_progress.json` mais próximo.
 
-Se não for encontrado, registre em "Soft-fails" a linha "progress file not found, status not tracked" no relatório e prossiga. O veredito, o chat report e o relatório em arquivo são produzidos normalmente.
+Se não for encontrado, registre em "Soft-fails" a linha "arquivo de progresso não encontrado, status não rastreado" no relatório e prossiga. O veredito, o chat report e o relatório em arquivo são produzidos normalmente.
 
 **Regra de escopo:** nunca toque na entrada de qualquer feature que não seja a target feature. Nunca modifique os campos de primeiro nível (`schema_version`, `prd_path`, `generated_at`).
 
@@ -379,5 +379,5 @@ Overrides não reconhecidos ou contraditórios: o default vence; registre em "Ov
 - **Itens subjetivos (`notes: subjective; manual review only`).** Sempre `MANUAL`, independentemente de filtro ou ambiente. Isso inclui todos os itens da seção `## Manual`.
 - **Coverage Manifest referencia IDs de itens que não aparecem sob nenhuma seção de superfície.** Trate como contrato malformado; aborte.
 - **Item referencia um handle / path / config que NÃO está declarado em Prerequisites.** Trate como contrato malformado; aborte citando a referência problemática.
-- **`only failed-last-run` depois de uma execução anterior `clean`.** Nenhum item se qualifica; aborte com explicação ("previous run was clean; nothing to re-run").
+- **`only failed-last-run` depois de uma execução anterior `clean`.** Nenhum item se qualifica; aborte com explicação ("a execução anterior foi clean; não há o que re-rodar").
 - **`only failed-last-run` depois de uma execução anterior `aborted`.** Itens marcados `FAIL` ou `BLOCKED` se qualificam e são re-executados — isso inclui itens marcados `BLOCKED — run aborted at item <ID>: ...` do abort anterior, já que nunca foram exercitados de forma honesta. Itens ainda marcados `PASS` de antes não são re-executados. Se nenhum item se qualificar, aborte com a mesma explicação do caso `clean`.

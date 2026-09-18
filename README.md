@@ -227,6 +227,42 @@ plugin. É a fonte canônica; as skills apontam para lá em vez de embutir coman
 > confirme com `glab <comando> --help` na primeira execução real. Um flag errado
 > degrada para o soft-fail normal — "abra o MR à mão" —, nunca para trabalho perdido.
 
+## Regra de idioma
+
+Os documentos gerados são pt-BR, e as mensagens que o pipeline escreve no chat também.
+O que **não** é traduzido é o inglês que carrega peso: o texto que outra skill, um
+script ou um parser vai procurar. Essa fronteira é a regra — quem editar o plugin
+precisa saber de que lado cada string está antes de mexer nela.
+
+**Carrega peso — não traduza:**
+
+| Categoria | Exemplos | Quem depende |
+|---|---|---|
+| Âncoras do PRD | `## 6. Functional Requirements`, `Capabilities`, `Dependency Graph`, `Execution Waves`, `Foundation Features` | `spec-writer`, `implement-feature`, `implement-and-evaluate-tmux` |
+| Âncoras do `contract.md` | `## Prerequisites`, `## Quality gates`, `## Coverage Manifest`, `Verification mode:`, `Common given:`, `Used by:` | `implement-feature`, `evaluator`, `fix-runner`, `design-review` |
+| Âncoras do eval-report | `## Abort reason`, `**Verdict:**`, `PASS` / `FAIL` / `BLOCKED` / `MANUAL` | `fix-runner` |
+| Âncoras do journal | `## Final Verdict`, `**Status:**`, `**Total cycles:**`, `**Pull request:**` | **`team-driver.sh`, via `awk`** |
+| Valores de status | `success`, `manual-pending`, `stuck`, `exhausted`, `aborted`, `pr-blocked`, `running`, `done`, `implementing` | **`team-driver.sh` e `dashboard.sh`, via `case` e `grep -E`** |
+| Chaves e valores do `prd_progress.json` | `status`, `failure_reason`, `cycles`, `wave`, `dependencies` | todo o pipeline de execução |
+| Chaves do JSON que os subagentes devolvem | `status`, `items.failed`, `acs.verified`, `abort_reason` | `implement-and-evaluate` |
+| Mensagens de commit | `feat(F03):`, `fix(F03): cycle 2 — address items …`, `chore(F03): record evaluation artifacts` | `implement-feature` detecta fase já commitada pela mensagem |
+| Gramática de override | `max 3 retries`, `keep eval env`, `with design review`, `no branch`, `progress-path=` | é o que o usuário digita |
+| Nomes de arquivo e marcadores | `eval-report-<ts>.md`, `eval_<fid>_*`, `dsg_<fid>_*` | limpeza de órfãos do `evaluator` e do `design-review` |
+
+> 🔴 Os dois scripts bash são o caso perigoso. Se `## Final Verdict` ou `success`
+> virarem português, o `team-driver.sh` e o `dashboard.sh` falham **em silêncio**: a
+> equipe termina bem, o dashboard segue mostrando tudo como se ainda estivesse
+> rodando, e só o timeout encerra a wave.
+
+**Não carrega peso — escreva em pt-BR:** tudo que só é impresso para uma pessoa ler —
+as perguntas interativas (`"Posso prosseguir? (sim/não)"`), os aborts
+(`"Nenhum PRD encontrado. Passe o path explicitamente."`), os avisos e as linhas de
+`Soft-fails`. Ninguém faz parse dessas strings; elas existem para serem lidas.
+
+O `contract.md` tem a sua própria versão dessa regra — conteúdo em pt-BR, âncoras
+estruturais e vocabulário de capability em inglês —, canônica em
+`skills/spec-writer/references/contract-template.md`.
+
 ## Desenvolvimento local
 
 Para testar sem publicar:

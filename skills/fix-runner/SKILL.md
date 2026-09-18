@@ -179,7 +179,7 @@ Aplique o menor conjunto de edições que plausivelmente satisfaça os itens (ou
 
 Rode os quality gates e os testes. **Descubra os dois comandos a partir do projeto — não os fixe no código.**
 
-- **Gates** — leia a seção `## Quality gates` do contrato e execute o comando literal de cada entrada. Se o contrato não tiver seção `## Quality gates`, use o que a documentação do projeto (`CLAUDE.md`, `harness/`, `README*`) nomeia como runner de gates; se nada estiver declarado em lugar nenhum, registre o soft-fail "no gates declared in contract or project docs; skipping gate validation" e prossiga para os testes.
+- **Gates** — leia a seção `## Quality gates` do contrato e execute o comando literal de cada entrada. Se o contrato não tiver seção `## Quality gates`, use o que a documentação do projeto (`CLAUDE.md`, `harness/`, `README*`) nomeia como runner de gates; se nada estiver declarado em lugar nenhum, registre o soft-fail "nenhum gate declarado no contrato nem na documentação do projeto; validação de gates pulada" e prossiga para os testes.
 - **Testes** — descubra o comando pelos manifests/scripts do projeto (`package.json`, `Makefile`, `Taskfile`, `pyproject.toml` etc.).
 
 **Retry budget interno: 3 tentativas com gates ou testes vermelhos.** Cada tentativa: leia a falha, ajuste a edição, rode de novo. O budget é compartilhado entre gates e testes.
@@ -230,7 +230,7 @@ Quando o Step 1 detectar o Mode B, siga este fluxo em vez dos Steps 2–7.
 **Inicie o merge, se necessário.** Quando `pr=<ref>` foi informado:
 
 1. Resolva o forge do projeto (`github` | `gitlab`) conforme `${CLAUDE_PLUGIN_ROOT}/references/forge.md` (seções 1 e 2) e busque os metadados do PR/MR com a operação **"ver metadados de um PR/MR"** (§ 3.6), usando o mapeamento de campos de lá — o corpo é `body` no GitHub e `description` no GitLab. Aborte se o CLI do forge estiver ausente ou não autenticado, se o PR/MR não existir ou se o estado dele não for aberto (`OPEN` no GitHub, `opened` no GitLab — aceite os dois literais).
-2. Verifique se a branch atual é igual à **branch de origem** do PR/MR (`headRefName` no GitHub, `source_branch` no GitLab). Se não for, aborte com `"PR head is <X>; current branch is <Y> — refusing to switch branches"`.
+2. Verifique se a branch atual é igual à **branch de origem** do PR/MR (`headRefName` no GitHub, `source_branch` no GitLab). Se não for, aborte com `"a branch de origem do PR/MR é <X>; a branch atual é <Y> — não vou trocar de branch"`.
 3. Verifique se a working tree está limpa. A checagem considera **apenas arquivos versionados** (arquivos não versionados, como `eval-report-*.md` e `eval-screenshots-*/`, não contam) e **ignora o `prd_progress.json`** (que esta própria skill acabou de alterar ao incrementar `cycles`). Se houver qualquer outra mudança em arquivo versionado, aborte listando os paths no motivo.
 4. `git fetch origin <branch-de-destino>` e `git merge origin/<branch-de-destino>` (`baseRefName` no GitHub, `target_branch` no GitLab).
 5. Se o merge terminou limpo (sem marcadores na working tree), pule direto para **Commit** com a variante limpa.
@@ -283,7 +283,7 @@ Quando o Step 1 detectar o Mode C, siga este fluxo em vez dos Steps 2–7.
 - A seção `## Design fixes`, lida por título literal: cada bloco `### DSG-<NN>` até a próxima seção `##`. De cada bloco, leia `Severity`, `Dimension`, `Evidence`, `Observed` e `Change`.
 - A seção `## Mechanical floor` — todo `✗` em M1–M6 é um blocker de acessibilidade e tem prioridade sobre qualquer fix estético.
 
-Selecione os fixes a aplicar: os IDs de `fix-items=` quando informado; caso contrário, todos os `blocker` e `major`. Se a seleção ficar vazia (relatório sem fixes, ou `fix-items=` nomeando IDs inexistentes), aborte com `"no applicable design fixes in <report>"`.
+Selecione os fixes a aplicar: os IDs de `fix-items=` quando informado; caso contrário, todos os `blocker` e `major`. Se a seleção ficar vazia (relatório sem fixes, ou `fix-items=` nomeando IDs inexistentes), aborte com `"nenhum design fix aplicável em <report>"`.
 
 Leia também os artefatos de design do projeto antes de editar: tokens, tema, biblioteca de componentes e as telas irmãs já existentes. **Uma correção que resolve o achado introduzindo um valor hardcoded fora do sistema não é uma correção** — troca um achado por outro que o próximo `design-review` vai registrar como desvio.
 
@@ -321,7 +321,7 @@ Esta skill incrementa o contador `cycles` num arquivo compartilhado `prd_progres
 2. Procure a partir da pasta da feature resolvida no Step 1 para cima (máximo 4 níveis) pelo `prd_progress.json` mais próximo. O `prd-writer-for-complete-project` grava o arquivo ao lado do PRD por padrão, e as pastas de feature ficam ao lado do PRD (ex.: `docs/F03-video-upload/` → `docs/prd_progress.json`).
 3. Procure a partir do CWD para cima (máximo 4 níveis) pelo `prd_progress.json` mais próximo.
 
-Se não for encontrado, registre em `Soft-fails` a linha "progress file not found, cycles not tracked" e prossiga. O trabalho de correção nunca é bloqueado pelo tracking.
+Se não for encontrado, registre em `Soft-fails` a linha "arquivo de progresso não encontrado, ciclos não rastreados" e prossiga. O trabalho de correção nunca é bloqueado pelo tracking.
 
 **Regra de escopo:** nunca toque na entrada de qualquer feature que não seja a target feature. Nunca modifique os campos de primeiro nível (`schema_version`, `prd_path`, `generated_at`). Nunca modifique `status` — esse campo é gravado por outros steps do workflow; esta skill é neutra em relação ao status.
 
@@ -397,20 +397,20 @@ Overrides não reconhecidos ou contraditórios → o default vence; registre em 
 
 ## EDGE CASES
 
-- **O path do eval-report aponta para uma feature diferente da `feature` resolvida** — aborte: "eval-report belongs to `<other-feature>`; refusing to mix".
-- **Um item de `failed-items` não está presente no eval-report** — registre em `Soft-fails` ("item `<ID>` not in report; skipped") e continue com os demais. Não aborte, a menos que a lista inteira fique vazia.
+- **O path do eval-report aponta para uma feature diferente da `feature` resolvida** — aborte: "o eval-report é de `<other-feature>`; não vou misturar features".
+- **Um item de `failed-items` não está presente no eval-report** — registre em `Soft-fails` ("item `<ID>` ausente do relatório; pulado") e continue com os demais. Não aborte, a menos que a lista inteira fique vazia.
 - **`failed-items` vazio com relatório em `aborted at step <N>`** — caso válido: diagnostique pelo `## Abort reason` (Steps 2–3) e commite com a variante `address evaluator abort at step <N>`. Com qualquer outro status, lista vazia é campo obrigatório ausente → aborte.
 - **Relatório em `fail (gate <name>)`** — todos os itens estão `BLOCKED — run aborted at gates: <name>`. Diagnostique pelo gate que falhou (Step 3), não pelos Prerequisites; o gate precisa ficar verde no Step 5 para haver commit.
-- **Todos os itens alvo são `MANUAL`** — aborte: "all targeted items are subjective (`MANUAL`); fix-runner can't auto-fix manual items".
-- **O path do design-report aponta para outra feature** — aborte: "design-report belongs to `<other-feature>`; refusing to mix".
-- **Design-report em `pass` sem nenhum fix** — aborte: "no applicable design fixes in `<report>`". Não é falha; é alvo errado.
+- **Todos os itens alvo são `MANUAL`** — aborte: "todos os itens alvo são subjetivos (`MANUAL`); o fix-runner não corrige itens manuais automaticamente".
+- **O path do design-report aponta para outra feature** — aborte: "o design-report é de `<other-feature>`; não vou misturar features".
+- **Design-report em `pass` sem nenhum fix** — aborte: "nenhum design fix aplicável em `<report>`". Não é falha; é alvo errado.
 - **Fix de design exigiria mudar comportamento** (ex.: `Change` pede paginação onde não há endpoint) — pule, registre em `Design fixes skipped` com o motivo e siga. O caminho certo é uma mudança de contrato via `spec-writer`, não uma edição escondida num design pass.
 - **Todos os `failed-items` estão BLOCKED no mesmo Prerequisite** — corrija o Prerequisite uma vez; a correção provavelmente desbloqueia todos numa única edição.
-- **A correção exigiria modificar `contract.md` / `spec.md` / `plan.md`** — aborte: "the fix would require contract/spec/plan changes; that is a feature-triple revision, not a corrective pass. Re-author the triple and re-invoke."
+- **A correção exigiria modificar `contract.md` / `spec.md` / `plan.md`** — aborte: "a correção exigiria mudar contract/spec/plan; isso é uma revisão do trio da feature, não uma passada corretiva. Reescreva o trio e re-invoque."
 - **Mudança de schema necessária** — edite a fonte do schema do projeto (Seção 4 do `spec.md` ou documentação do projeto) e registre um soft-fail orientando o usuário a rodar o comando de migration do projeto (descoberto na Seção 4 do `spec.md`, em `CLAUDE.md` / `harness/` / `README*` ou nos manifests) depois que esta skill terminar. Não tente rodar a migration se o comando for interativo.
-- **Working tree suja no início (Mode A)** — prossiga; o commit faz stage apenas dos arquivos que esta execução tocou. Arquivos que já estavam sujos continuam sujos. Registre "pre-existing dirty files: `<lista>`" em `Soft-fails`.
-- **Nenhuma mudança de código parece necessária** (ex.: a falha foi flaky) — aborte com status `aborted` e motivo "no edits identified; the failure may be flaky. Re-invoke evaluation without a fix cycle."
-- **Comandos de validação não descobríveis** — registre cada comando ausente em `Soft-fails`. Se gates e testes estiverem ambos ausentes, aborte: "no validation commands available; can't verify the fix would not regress".
+- **Working tree suja no início (Mode A)** — prossiga; o commit faz stage apenas dos arquivos que esta execução tocou. Arquivos que já estavam sujos continuam sujos. Registre "arquivos já sujos antes da execução: `<lista>`" em `Soft-fails`.
+- **Nenhuma mudança de código parece necessária** (ex.: a falha foi flaky) — aborte com status `aborted` e motivo "nenhuma edição identificada; a falha pode ser flaky. Re-invoque a avaliação sem um ciclo de correção."
+- **Comandos de validação não descobríveis** — registre cada comando ausente em `Soft-fails`. Se gates e testes estiverem ambos ausentes, aborte: "nenhum comando de validação disponível; não dá para verificar se a correção não regrediu nada".
 - **Falhas de teste pré-existentes** — registre em `Soft-fails`; não contam para o retry budget; não bloqueiam o commit.
 - **A evidência de um item com falha é um erro de rede/transporte** em vez de uma falha HTTP — o serviço provavelmente não subiu durante a avaliação anterior. Olhe para a implementação como se o serviço estivesse quebrado (provavelmente uma exceção na inicialização ou numa rota).
-- **O eval-report é mais antigo que o HEAD** — registre o soft-fail "eval-report is older than HEAD; some failures may already be resolved", mas continue.
+- **O eval-report é mais antigo que o HEAD** — registre o soft-fail "o eval-report é mais antigo que o HEAD; algumas falhas podem já estar resolvidas", mas continue.

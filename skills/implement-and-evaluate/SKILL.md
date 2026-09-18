@@ -668,7 +668,7 @@ Se `keep eval env` foi respeitado, acrescente um bloco final listando os detalhe
 
 ## PROGRESS TRACKING
 
-Este orquestrador delega a maior parte das escritas no `prd_progress.json` às três sub-skills. O schema é canônico na skill `prd-writer-for-complete-project` (seção "SCHEMA DO ARQUIVO DE PROGRESSO"); esta seção documenta apenas as escritas do orquestrador.
+Este orquestrador delega a maior parte das escritas no `prd_progress.json` às três sub-skills. O schema é canônico em `${CLAUDE_PLUGIN_ROOT}/references/progress-schema.md`; esta seção documenta apenas as escritas do orquestrador.
 
 - `implement-feature` grava `status="implementing"` (transitório, início do Step 5 dela), `status="implemented"` (no final do Step 7 dela, quando não abortou) ou `status="fail"` num abort de fase / pré-fase.
 - `evaluator` grava `status="done"` no clean, `status="fail"` em fail / fail-gate / abort, mais `report_path`. No `pending`, não muda o status.

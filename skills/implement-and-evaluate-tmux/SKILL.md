@@ -35,7 +35,7 @@ Free-form. Quatro famílias de tokens são reconhecidas; tudo o mais é repassad
 
 A seleção PRECISA resolver para ≥1 feature. Seleção vazia → aborte explicando o conjunto resolvido.
 
-**A seleção é resolvida a partir do `prd_progress.json`, nunca por parse do PRD.** O arquivo já carrega `wave`, `dependencies`, `status` e `name` por feature (schema canônico na skill `prd-writer-for-complete-project`, seção "SCHEMA DO ARQUIVO DE PROGRESSO"). O PRD só é lido no Step 1.7, e apenas para descobrir as Foundation Features.
+**A seleção é resolvida a partir do `prd_progress.json`, nunca por parse do PRD.** O arquivo já carrega `wave`, `dependencies`, `status` e `name` por feature (schema canônico em `${CLAUDE_PLUGIN_ROOT}/references/progress-schema.md`). O PRD só é lido no Step 1.7, e apenas para descobrir as Foundation Features.
 
 Cada feature selecionada PRECISA ter:
 - Uma pasta `docs/F<ID>-<slug>/` contendo `spec.md`, `plan.md` e `contract.md`.
@@ -597,3 +597,4 @@ Nos dois regimes, o `wave-status.md` é o retrato canônico de nível de wave (s
 **`references/`** — documentos só de leitura que o orquestrador consulta e nunca executa:
 - `references/wave-status-template.md` — formato fixado do `wave-status.md` E do relatório consolidado no chat.
 - `${CLAUDE_PLUGIN_ROOT}/references/forge.md` (raiz do plugin) — canônico para a resolução do forge, a pré-checagem de CLI e as seis operações de GitHub/GitLab usadas pelo pipeline.
+- `${CLAUDE_PLUGIN_ROOT}/references/progress-schema.md` (raiz do plugin) — canônico para o schema do `prd_progress.json`: chaves, valores de `status`, semântica dos campos e invariantes. A seleção por wave dos Steps 1.4–1.6 lê esse arquivo.

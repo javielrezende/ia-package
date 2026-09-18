@@ -313,7 +313,7 @@ Mesmas restrições do Step 6: stage por nome de arquivo, sem `--no-verify`, sem
 
 ## PROGRESS TRACKING
 
-Esta skill incrementa o contador `cycles` num arquivo compartilhado `prd_progress.json` a cada execução, restrito à entrada da target feature. O arquivo é o registro determinístico do estado das features ao longo do pipeline `implement-feature` → `evaluator` → `fix-runner`. O schema é canônico na skill `prd-writer-for-complete-project` (seção "SCHEMA DO ARQUIVO DE PROGRESSO"); esta seção documenta apenas as escritas desta skill.
+Esta skill incrementa o contador `cycles` num arquivo compartilhado `prd_progress.json` a cada execução, restrito à entrada da target feature. O arquivo é o registro determinístico do estado das features ao longo do pipeline `implement-feature` → `evaluator` → `fix-runner`. O schema é canônico em `${CLAUDE_PLUGIN_ROOT}/references/progress-schema.md`; esta seção documenta apenas as escritas desta skill.
 
 **Localizando o arquivo** (na ordem; o primeiro encontrado vence):
 

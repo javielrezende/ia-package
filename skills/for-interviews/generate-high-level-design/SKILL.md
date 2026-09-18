@@ -1,7 +1,7 @@
 ---
 name: generate-high-level-design
 description: |
-  Conduz uma entrevista guiada, uma pergunta por vez, para gerar um HLD (High-Level Design) em português, cobrindo arquitetura, componentes, fluxos de requisição e dados, modelo de dados, interfaces públicas, escalabilidade, segurança, observabilidade e riscos arquiteturais, com export opcional em JSON. Use quando: (1) Definir a arquitetura de um sistema ou módulo antes de partir para FDD ou LLD, (2) Documentar topologia, componentes e integrações de uma solução, (3) Registrar decisões arquiteturais e ADRs candidatos. Keywords: "hld", "high level design", "desenho de arquitetura", "arquitetura do sistema", "design de alto nível", "topologia".
+  Conduz uma entrevista guiada, uma pergunta por vez, para gerar um HLD (High-Level Design) em português, cobrindo arquitetura, componentes, fluxos de requisição e dados, modelo de dados, interfaces públicas, escalabilidade, segurança, observabilidade e riscos arquiteturais. Grava o resultado em `docs/HLD.md` e oferece export opcional em JSON. Use quando: (1) Definir a arquitetura de um sistema ou módulo antes de partir para FDD ou LLD, (2) Documentar topologia, componentes e integrações de uma solução, (3) Registrar decisões arquiteturais e ADRs candidatos. Keywords: "hld", "high level design", "desenho de arquitetura", "arquitetura do sistema", "design de alto nível", "topologia".
 ---
 
 # Objetivo
@@ -10,7 +10,7 @@ Conduzir uma entrevista estruturada para gerar um **HLD (High-Level Design)** cl
 
 O HLD final deve ser renderizado exatamente no formato definido em **“Esqueleto de HLD (modelo de saída)”**, em português.
 
-Após gerar o HLD, pergunte ao usuário se ele deseja o documento exportado em JSON segundo **“Estrutura de Dados (JSON)”**.
+Depois de gerar o HLD, grave-o em disco conforme **“Gravação do documento”** e só então pergunte ao usuário se ele deseja o documento também exportado em JSON segundo **“Estrutura de Dados (JSON)”**.
 
 ## Papel
 
@@ -362,6 +362,27 @@ Próximos passos
 
 ```
 
+## Gravação do documento
+
+O HLD não termina no chat. Ele é um artefato do pipeline: o hook de sessão procura
+`docs/HLD.md` para dizer onde o projeto está, o FDD é escrito no contexto dele, e o
+`spec-writer` o consulta quando existe. Um HLD que só foi impresso na conversa não
+existe para nenhuma dessas etapas.
+
+Depois que o usuário confirmar o documento final:
+
+1. Garanta que a pasta `docs/` existe (`mkdir -p docs`).
+2. O destino é `docs/HLD.md`. É um documento por projeto, não por feature.
+3. **Se o arquivo já existir, não sobrescreva calado.** Leia-o, diga ao usuário que já
+   há um HLD ali e de quando ele é (a linha `Data:`), e ofereça três saídas:
+   sobrescrever, gravar como `docs/HLD-<AAAA-MM-DD>.md`, ou não gravar. Só escreva
+   depois da resposta.
+4. Grave com a ferramenta Write, no formato exato do **“Esqueleto de HLD (modelo de saída)”**.
+5. Informe o path gravado em uma linha.
+
+O export em JSON continua opcional e é oferecido depois da gravação. O arquivo Markdown
+não é opcional.
+
 ## Mensagem inicial para o usuário
 
-Olá! Eu sou um assistente de criação de **HLD**. Vou te fazer perguntas objetivas sobre objetivo técnico, arquitetura, componentes, fluxos, dados, interfaces, escalabilidade, segurança, observabilidade e riscos. No final, entrego o HLD no formato padrão e, se quiser, também exporto um JSON estruturado. Podemos começar com um resumo técnico do sistema ou módulo e qual problema arquitetural ele resolve agora?
+Olá! Eu sou um assistente de criação de **HLD**. Vou te fazer perguntas objetivas sobre objetivo técnico, arquitetura, componentes, fluxos, dados, interfaces, escalabilidade, segurança, observabilidade e riscos. No final, salvo o HLD em `docs/HLD.md` no formato padrão e, se quiser, também exporto um JSON estruturado. Podemos começar com um resumo técnico do sistema ou módulo e qual problema arquitetural ele resolve agora?

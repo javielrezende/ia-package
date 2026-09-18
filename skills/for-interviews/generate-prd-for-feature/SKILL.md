@@ -1,7 +1,7 @@
 ---
 name: generate-prd-for-feature
 description: |
-  Conduz uma entrevista guiada, uma pergunta por vez, para gerar o PRD de UMA feature de software em português, com export opcional em JSON de chaves em inglês. Use quando: (1) Especificar uma única feature dentro de um produto ou sistema que já existe, (2) Levantar requisitos funcionais e não funcionais, arquitetura, decisões, riscos e critérios de aceite de uma feature, (3) O usuário quiser o PRD escrito em português. Para o PRD do produto inteiro, use a skill de PRD de projeto completo (também em português). Keywords: "prd de feature", "feature prd", "prd em português", "entrevista de requisitos", "requisitos de feature", "prd de uma feature".
+  Conduz uma entrevista guiada, uma pergunta por vez, para gerar o PRD de UMA feature de software em português, gravado na pasta da feature (docs/F<ID>-<slug>/PRD.md), com export opcional em JSON de chaves em inglês. Use quando: (1) Especificar uma única feature dentro de um produto ou sistema que já existe, (2) Levantar requisitos funcionais e não funcionais, arquitetura, decisões, riscos e critérios de aceite de uma feature, (3) O usuário quiser o PRD escrito em português. Para o PRD do produto inteiro, use a skill de PRD de projeto completo (também em português). Keywords: "prd de feature", "feature prd", "prd em português", "entrevista de requisitos", "requisitos de feature", "prd de uma feature".
 ---
 
 # Objetivo
@@ -17,7 +17,7 @@ O PRD final deve explicar:
 
 O PRD final deve ser renderizado exatamente no formato definido em "Esqueleto de PRD (modelo de saída)", em português.
 
-Depois de gerar o PRD em português, você deve perguntar ao usuário se ele também quer o PRD exportado em JSON. Esse JSON deve seguir a estrutura de chaves em inglês definida em "Estrutura de Dados (JSON)".
+Depois de gerar o PRD em português, grave-o em disco conforme "Gravação do documento" e só então pergunte ao usuário se ele também quer o PRD exportado em JSON. Esse JSON deve seguir a estrutura de chaves em inglês definida em "Estrutura de Dados (JSON)".
 
 ## Papel
 
@@ -556,8 +556,38 @@ Estratégia de validação
 
 ```
 
+## Gravação do documento
+
+O PRD de feature não termina no chat. Ele é um artefato do pipeline: o `spec-writer`
+trabalha a partir do que está escrito, e o hook de sessão só enxerga o que existe em
+disco.
+
+Depois que o usuário confirmar o documento final, resolva o destino nesta ordem:
+
+1. **Pasta da feature.** Procure em `docs/` uma pasta que case com `F<ID>-*/` para a
+   feature entrevistada. É a convenção do resto do pipeline (`docs/F03-video-upload/`).
+   Um único match → grave em `docs/F<ID>-<slug>/PRD.md`.
+2. **Vários matches** → mostre os candidatos e pergunte qual é o certo. Não escolha sozinho.
+3. **Nenhum match** → grave em `docs/PRD-<slug>.md`, com `<slug>` derivado do nome da
+   feature em minúsculas, sem acento e com hifens (`Upload de vídeo` → `upload-de-video`).
+   Diga ao usuário que nenhuma pasta de feature foi encontrada.
+
+**Nunca grave em `docs/PRD.md`.** Esse path é do PRD do produto inteiro, gerado pelo
+`prd-writer-for-complete-project`. Sobrescrevê-lo apagaria o documento que o resto do
+pipeline usa como fonte de escopo.
+
+Garanta que a pasta de destino existe antes de escrever (`mkdir -p`).
+
+**Nunca sobrescreva calado.** Se o arquivo de destino já existir, leia-o, diga ao usuário
+que já há um PRD ali e de quando ele é, e ofereça três saídas: sobrescrever, gravar como
+`PRD-<AAAA-MM-DD>.md` na mesma pasta, ou não gravar. Só escreva depois da resposta.
+
+Grave com a ferramenta Write, no formato exato do "Esqueleto de PRD (modelo de saída)", e
+informe o path em uma linha. O export em JSON é oferecido depois da gravação e continua
+opcional; o arquivo Markdown não é.
+
 ## Início da entrevista
 
 Mensagem inicial para o usuário:
 
-Olá, eu sou um assistente de criação de PRDs de features. Vou te fazer algumas perguntas para entender a necessidade dessa feature, o problema que ela resolve, o objetivo de negócio e onde ela vai rodar. No final eu gero o PRD pronto no formato padrão e, se você quiser, também entrego esse PRD em formato JSON estruturado com chaves em inglês. Podemos começar com um resumo rápido da feature e por que ela é necessária agora?
+Olá, eu sou um assistente de criação de PRDs de features. Vou te fazer algumas perguntas para entender a necessidade dessa feature, o problema que ela resolve, o objetivo de negócio e onde ela vai rodar. No final eu gero o PRD pronto no formato padrão, salvo na pasta da feature (`docs/F<ID>-<slug>/PRD.md`) e, se você quiser, também entrego esse PRD em formato JSON estruturado com chaves em inglês. Podemos começar com um resumo rápido da feature e por que ela é necessária agora?

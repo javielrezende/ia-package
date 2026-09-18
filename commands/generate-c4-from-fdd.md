@@ -10,7 +10,7 @@ Extraia o file path do FDD, o output folder opcional e a flag opcional --no-imag
 
 IMPORTANTE: Antes de prosseguir, valide se o file path do FDD fornecido existe e é acessível. Caso não seja, faça um Early Return informando o erro ao usuário para evitar o consumo de recursos desnecessários.
 
-Se a validação passar, você DEVE invocar o agent c4-diagram-generator usando a Task tool com subagent_type="c4-diagram-generator".
+Se a validação passar, você DEVE invocar o agent c4-diagram-generator usando a Agent tool com subagent_type="c4-diagram-generator".
 
 Passe o seguinte prompt para o agent:
 

@@ -71,6 +71,7 @@ correção.
 
 | Command | Faz |
 |---|---|
+| `/adr-generate [MODULE_ID ...] [--output-dir=] [--context-dir=] [--language=]` | Fase 3 do fluxo de ADRs: um agente `adr-generator` por potential ADR, em paralelo, depois a numeração sequencial e o relatório |
 | `/generate-c4-from-fdd <fdd.md> [pasta] [--no-images]` | C4 em PlantUML a partir do FDD |
 | `/generate-mermaid-diagram-from-fdd <fdd.md> [pasta]` | Diagramas Mermaid a partir do FDD |
 
@@ -122,6 +123,32 @@ vez de escolher.
 lá e oferece três saídas: sobrescrever, gravar com a data no nome, ou não gravar. O
 `generate-prd-for-feature` nunca escreve em `docs/PRD.md`: esse path é do PRD do produto
 inteiro, e o resto do pipeline o usa como fonte de escopo.
+
+## O fluxo de ADRs
+
+São três fases, e cada uma tem porta de entrada própria:
+
+1. **Mapeamento e identificação** — o agente `adr-analyzer` varre o codebase, grava
+   `docs/adrs/mapping.md` e depois os potential ADRs em
+   `docs/adrs/potential-adrs/{must-document,consider}/<MODULE>/`.
+2. **Geração** — `/adr-generate` pega esses arquivos e produz os ADRs formais em MADR
+   em `docs/adrs/generated/<MODULE>/` (ou `needs-input/` quando faltam decisões de
+   negócio, custo ou compliance para um humano responder).
+3. **Ligação** — o agente `adr-linker` escreve os relacionamentos entre os ADRs. O
+   `/adr-generate` oferece rodá-lo no fim, e só roda com o sim explícito: ele reescreve
+   cabeçalhos de ADRs que já existiam.
+
+O `adr-generator` processa **um** arquivo por invocação, então `/adr-generate` despacha
+um agente por potential ADR em paralelo (até 8 por lote). Isso é o que torna a
+**numeração trabalho do command, não do agente**: agentes paralelos não conseguem
+combinar números entre si, então cada um grava o placeholder `ADR-XXX` e o command
+atribui a sequência no fim, numa passada serial, continuando de onde os ADRs existentes
+pararam.
+
+Cada potential ADR só vai para `potential-adrs/done/` depois de o ADR formal estar em
+disco. Por isso rodar `/adr-generate` de novo retoma o que falhou sem duplicar o que já
+passou — e `/adr-generate <MODULE_ID>` limita a rodada a um módulo, que é como dar conta
+de um codebase grande sem estourar o contexto.
 
 ## A branch de trabalho
 

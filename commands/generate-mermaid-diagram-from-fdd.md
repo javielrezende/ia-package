@@ -2,7 +2,7 @@
 description: Gerar diagramas Mermaid a partir de um Documento de Design de Funcionalidade (FDD). Usage: /generate-mermaid-diagram-from-fdd <path-to-fdd.md> [output-folder]
 ---
 
-Você DEVE invocar o agente gerador de diagramas Mermaid usando a ferramenta de Tarefa com subagent_type="mermaid-diagram-generator".
+Você DEVE invocar o agente gerador de diagramas Mermaid usando a Agent tool com subagent_type="mermaid-diagram-generator".
 
 Extraia o caminho do arquivo do FDD e a pasta de saída opcional dos argumentos do comando:
 - Caminho do arquivo FDD (obrigatório)

@@ -31,6 +31,9 @@
 #
 # Status file: $wave_dir/status/$feature_id.status
 # Um campo por linha, key=value. Escrita atômica (grava num temporário + rename).
+# O campo pr_url não é gravado aqui: o journal é fechado antes de a PR/MR existir, então
+# não tem a URL. A Main acrescenta o pr_url no Step 7.0 do SKILL.md, buscando a PR/MR
+# pela branch da equipe no forge.
 # Marcador de início: $wave_dir/status/$feature_id.started
 
 set -uo pipefail
@@ -110,13 +113,12 @@ is_terminal() {
 # então uma segunda chamada — ou uma chamada depois do `timeout` da Main — não muda nada.
 finalize_from_journal() {
     local claude_exit="${1:-}"
-    local finished_at journal status_value abort_reason pr_url cycles fv_status tmp
+    local finished_at journal status_value abort_reason cycles fv_status tmp
 
     finished_at="$(now_iso)"
     journal="$(latest_journal)"
     status_value="aborted"
     abort_reason=""
-    pr_url=""
     cycles=""
 
     if [ -n "$journal" ]; then
@@ -137,13 +139,6 @@ finalize_from_journal() {
                 exit
             }
         ' "$journal")"
-
-        # URL do PR/MR, se o journal citar alguma. Aceita as duas formas de forge:
-        # GitHub `.../pull/<N>` e GitLab `.../-/merge_requests/<N>`, em qualquer host
-        # (GitLab auto-hospedado não usa gitlab.com). O nome do campo continua
-        # `pr_url` — o dashboard.sh e o wave-status-template.md o leem por esse nome.
-        # `|| true` porque o pipefail propagaria o exit 1 do grep quando não houver match.
-        pr_url="$( { grep -oE 'https://[^[:space:]]+/(pull|-/merge_requests)/[0-9]+' "$journal" || true; } | tail -n1)"
     else
         abort_reason="journal-not-found"
     fi
@@ -167,7 +162,6 @@ finalize_from_journal() {
         [ -n "$claude_exit" ]  && printf 'claude_exit=%s\n' "$claude_exit"
         [ -n "$cycles" ]       && printf 'cycles=%s\n' "$cycles"
         [ -n "$journal" ]      && printf 'journal=%s\n' "$journal"
-        [ -n "$pr_url" ]       && printf 'pr_url=%s\n' "$pr_url"
         [ -n "$abort_reason" ] && printf 'abort_reason=%s\n' "$abort_reason"
     } > "$tmp"
 

@@ -71,7 +71,12 @@ que já há um FDD ali e de quando ele é, e ofereça três saídas: sobrescreve
 
 Grave com a ferramenta Write e informe o path em uma linha. Os dois commands de diagrama
 (`/generate-c4-from-fdd` e `/generate-mermaid-diagram-from-fdd`) recebem o path do FDD por
-argumento, então funcionam com qualquer um desses layouts sem alteração.
+argumento e nomeiam os arquivos pela feature, não pelo nome do arquivo:
+`docs/F03-video-upload/FDD.md` (ou `FDD-<AAAA-MM-DD>.md` na mesma pasta) vira
+`F03-video-upload`, e `docs/FDD-upload-de-video.md` vira `upload-de-video` — daí
+`docs/c4/F03-video-upload-c1.puml` e `docs/mermaid/F03-video-upload-diagrams.md`. Um
+`FDD-<AAAA-MM-DD>.md` na raiz de `docs/` não diz de qual feature é, e o command pergunta o
+nome. Se os diagramas daquele nome já existirem, ele pergunta antes de sobrescrever.
 </output_file>
 
 <smart_defaults>

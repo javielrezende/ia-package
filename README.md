@@ -109,8 +109,8 @@ no PATH — se `python3` faltar, os scripts saem em silêncio em vez de quebrar 
 ## Onde os documentos são gravados
 
 As entrevistas não terminam no chat: cada uma grava o arquivo e informa o path. É o que
-faz a etapa seguinte encontrar o que a anterior escreveu — o hook de sessão só enxerga
-arquivo, e o `spec-writer` lê o que está em disco, não o que passou na conversa.
+faz a etapa seguinte encontrar o que a anterior escreveu — o hook de sessão e os commands
+de diagrama só enxergam arquivo, não o que passou na conversa.
 
 | Documento | Path | Regra |
 |---|---|---|

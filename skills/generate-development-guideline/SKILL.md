@@ -344,8 +344,9 @@ Forneça o seguinte:
 `docs/typescript-development-guidelines.md`). É um arquivo por linguagem: gerar a
 diretriz de outra linguagem nunca apaga a anterior. Crie `docs/` se não existir
 (`mkdir -p docs`), pergunte antes de sobrescrever um arquivo já existente, e informe o
-path gravado em uma linha. Entregar o documento só no chat não conta como entrega: as
-outras etapas do pipeline leem o arquivo, não a conversa.
+path gravado em uma linha. Entregar o documento só no chat não conta como entrega: o
+arquivo é a referência do time. O pipeline de execução não o lê sozinho: para que o
+implementador siga a diretriz, cite o path no `CLAUDE.md` do projeto.
 **6. Relatório de Validação**.
 
 ## ANTI-PADRÕES A EVITAR

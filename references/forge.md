@@ -219,7 +219,7 @@ Resolva **uma vez por execução** e guarde em cache.
 
 | Literal | Onde | Por quê |
 |---|---|---|
-| `status: "pr-blocked"` | `prd_progress.json`, journal | lido pelo `team-driver.sh:140` e pelo `dashboard.sh` |
+| `status: "pr-blocked"` | `prd_progress.json`, journal | lido pelo `team-driver.sh` (`is_terminal`) e pelo `dashboard.sh` |
 | `**Pull request:**` | header do bloco final do journal | é âncora de seção, não texto para o usuário |
 | `pr_url=` | status file das equipes do tmux | lido pelo `dashboard.sh:81` e pelo template de wave |
 | `feat(F<ID>): <Feature Name>` | título do PR/MR | convenção de commit, independente de forge |

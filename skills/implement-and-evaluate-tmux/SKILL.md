@@ -97,13 +97,14 @@ Por execução:
 
 1. **Sessão tmux** chamada `iaet-<wave-tag>-<run-id>` contendo:
    - **Janela 0 — `dashboard`** rodando `dashboard.sh` sob `watch -n 5`. É a fonte de status ao vivo durante a wave.
-   - **Janelas 1..N — uma por feature**, chamadas `<F-ID>-<slug>`, cada uma rodando `team-driver.sh`. O driver entra na worktree e roda `claude --permission-mode <modo> "/ia-package:implement-and-evaluate F<ID> <tail>"`; na saída, grava o status terminal da equipe.
+   - **Janelas 1..N — uma por feature**, chamadas `<F-ID>-<slug>`, cada uma rodando `team-driver.sh`. O driver entra na worktree e roda `claude --permission-mode <modo> "/ia-package:implement-and-evaluate F<ID> <tail>"`; um vigia em background grava o status terminal da equipe quando a execução termina, com o claude ainda aberto na janela.
 
 2. **Diretório da wave** em `.claude/worktrees/.wave-<run-id>/` contendo:
    - `wave.lock` — lockfile de nível de wave, com PID.
    - `wave.meta` — key=value: wave-tag, started_at, max_parallel, team_timeout, permission_mode, foundation_features, tail, selected_features.
    - `queue.txt` — fila das features ainda não despachadas.
    - `status/F<ID>.status` — um arquivo de status terminal por equipe, gravado pelo team driver.
+   - `status/F<ID>.started` — marcador de início da equipe, gravado pelo team driver logo antes do `claude`. Só a data de modificação importa: separa o journal desta execução dos journals antigos que a worktree herdou da branch padrão.
    - `status/F<ID>.log` — captura de `pipe-pane` do painel do claude (artefato só de debug).
    - `wave-status.md` — artefato consolidado final (formato em `references/wave-status-template.md`).
 
@@ -391,8 +392,16 @@ Cada chamada `tmux ...` retorna imediatamente — nenhuma delas bloqueia.
 O que o `team-driver.sh` faz dentro de cada janela:
 - Grava o status inicial (`status=running`, `started_at=<agora>`, `phase=spawning`).
 - Entra na worktree.
-- Roda `claude --permission-mode <modo> "/ia-package:implement-and-evaluate F<ID> <tail>"` em foreground na janela tmux.
-- Na saída do `claude` (por qualquer motivo): faz parse do bloco Final Verdict do journal mais recente em `docs/F<ID>-<slug>/orchestration-*.md`, grava o status terminal e então `sleep 99999` (mantém a janela viva para inspeção até um `tmux kill-window` ou o teardown da sessão).
+- Grava o marcador de início (`status/F<ID>.started`) e sobe o **vigia** em background, com toda a saída descartada — qualquer byte escrito no painel corromperia a TUI do claude.
+- Roda `claude --permission-mode <modo> "/ia-package:implement-and-evaluate F<ID> <tail>"` em foreground na janela tmux. É a TUI interativa: ela **não sai** quando a skill termina, e o painel fica com o claude aberto no prompt. Por isso o fim da execução não pode depender da saída do processo.
+- O vigia, a cada 15s, confere três condições juntas e, quando todas valem, faz o parse do Final Verdict e grava o status terminal — com o claude ainda aberto:
+  1. existe um `docs/F<ID>-<slug>/orchestration-*.md` mais novo que o marcador de início (os journals mais antigos vieram commitados da branch padrão e são de outras execuções);
+  2. o `**Status:**` do `## Final Verdict` dele é terminal (`success`, `manual-pending`, `stuck`, `exhausted`, `aborted`, `pr-blocked`);
+  3. o `docs/F<ID>-<slug>/.orchestrate.lock` não existe mais.
+
+  A condição 3 é a que garante o fim de verdade: no sucesso, o `/implement-and-evaluate` grava o Final Verdict no Step 7.6 dele, **antes** do push e da PR/MR, e só libera o lock no Step 8, **depois** deles. O vigia só grava sobre um status file ainda `running`: se a Main já gravou `timeout` (Step 6), ele sai sem escrever.
+- Se o `claude` sair (`/exit` manual, crash): o driver encerra o vigia. Se o status já for terminal, só acrescenta `claude_exit=<n>`; senão, faz ele mesmo o parse do journal desta execução (caminho de reserva) e grava o status terminal com o `claude_exit`.
+- Por fim, `sleep 99999`: mantém a janela viva para inspeção até um `tmux kill-window` ou o teardown da sessão.
 
 ### Step 6 — Esperar status terminal, respawnar da fila, aplicar o timeout
 
@@ -458,9 +467,9 @@ queue_left=$(grep -c . "$WAVE_DIR/queue.txt" 2>/dev/null || echo 0)
 echo "running=$running spawned=$spawned queue_left=$queue_left"
 ```
 
-A Main lê esses números, calcula o TETO conforme a regra do Step 5.1, despacha o que couber pela sequência do Step 5.2 e decide se para ou agenda outro tick. Uma atualização curta no chat a cada tick (`"3 equipes rodando, 1 na fila, 2 concluídas"`) é aceitável, mas opcional.
+A Main lê esses números, calcula o TETO conforme a regra do Step 5.1, despacha o que couber pela sequência do Step 5.2 e decide se para ou agenda outro tick. Uma equipe com status terminal libera a vaga mesmo com o claude ainda aberto na janela dela (Step 5.2); a janela só é fechada no Step 7.2. Uma atualização curta no chat a cada tick (`"3 equipes rodando, 1 na fila, 2 concluídas"`) é aceitável, mas opcional.
 
-**6.2 — Efeitos colaterais do timeout**: a worktree e a janela tmux de uma equipe que estourou o tempo são preservadas (`clean worktrees` NÃO apaga equipes em `timeout`). `status=timeout` é terminal para efeito da wave e mapeia para `fail` em qualquer reconcile (Step 7.1).
+**6.2 — Efeitos colaterais do timeout**: a janela tmux da equipe que estourou o tempo é morta pelo tick acima; a worktree é preservada (`clean worktrees` NÃO apaga equipes em `timeout`). `status=timeout` é terminal para efeito da wave e mapeia para `fail` em qualquer reconcile (Step 7.1).
 
 ### Step 7 — Consolidar, finalizar, emitir o relatório
 
@@ -488,8 +497,12 @@ Faça a escrita atômica do arquivo mesclado (read-modify-write do arquivo intei
 Se um journal estiver ausente ou não parseável em qualquer um dos regimes, registre um soft-fail e pule o reconcile daquela equipe (o arquivo mantém o estado anterior).
 
 **7.2 — Limpeza das worktrees**:
-- Para cada equipe com `status=success`: apague a worktree, salvo `keep worktrees`, com `git worktree remove --force .claude/worktrees/F<ID>-<slug>`. O `--force` é necessário porque a worktree carrega arquivos não rastreados que nenhum commit recolheu (logs de serviço, `.pids/`, tmpdirs do evaluator). A branch e o PR/MR permanecem no forge.
-- Para cada equipe com status diferente de `success`: preserve a worktree e a janela tmux, salvo `clean worktrees` (e mesmo assim, NUNCA para equipes em `timeout`).
+- Para cada equipe com `status=success`, salvo `keep worktrees`:
+  1. `tmux kill-window -t iaet-<wave-tag>-<run-id>:F<ID>-<slug>` — o claude da equipe continua aberto dentro da worktree (Step 5.2), e os painéis de serviços e portas também rodam nela. Ignore erro se a janela já não existir.
+  2. `git worktree remove --force .claude/worktrees/F<ID>-<slug>`. O `--force` é necessário porque a worktree carrega arquivos não rastreados que nenhum commit recolheu (logs de serviço, `.pids/`, tmpdirs do evaluator). A branch e o PR/MR permanecem no forge.
+
+  Com `keep worktrees`, a janela também fica.
+- Para cada equipe com status diferente de `success`: preserve a worktree e a janela tmux, com o claude aberto para inspeção, salvo `clean worktrees` (e mesmo assim, NUNCA para equipes em `timeout`). Com `clean worktrees`, mate a janela antes de remover a worktree, na mesma ordem do sucesso.
 
 **7.3 — Grave o `wave-status.md`** em `.claude/worktrees/.wave-<run-id>/wave-status.md` conforme `references/wave-status-template.md`.
 
@@ -537,6 +550,7 @@ Nos dois regimes, o `wave-status.md` é o retrato canônico de nível de wave (s
 - Use `git worktree add -b feat/F<ID>-<slug> <path> <default-branch>` para criar cada worktree numa branch única.
 - Rode `<worktree>/scripts/stop.sh --clean` na limpeza do Step 2.3 **apenas quando o arquivo existir e for executável**; qualquer erro dele é engolido e vira soft-fail. É convenção de projeto, não requisito desta skill.
 - Use `git worktree remove --force` em toda remoção de worktree (Steps 2.3 e 7.2) — worktrees sempre têm arquivos não rastreados.
+- No Step 7.2, mate a janela tmux da equipe antes de remover a worktree dela — o claude da equipe continua aberto lá dentro depois do fim da execução.
 - Aplique o throttling: teto 1 enquanto houver Foundation Feature não terminal; `max-parallel` depois disso.
 - Aplique o `team-timeout` por equipe comparando o relógio de parede contra o `started_at` da equipe, usando o `iso_to_epoch` do `lib-time.sh` (funciona em Linux e macOS).
 - No timeout, mate a janela tmux da equipe e grave `status=timeout` no status file. Preserve a worktree.
@@ -621,7 +635,8 @@ Nos dois regimes, o `wave-status.md` é o retrato canônico de nível de wave (s
 - **Timeout de relógio de parede dispara** → mate a janela tmux da equipe; grave `status=timeout`; worktree preservada. As outras continuam.
 - **Todas as equipes dão timeout** → o relatório mostra N timeouts. Status da wave = `all-failed`. O usuário investiga cada worktree.
 - **`permission-mode=auto` indisponível na sessão** (plano ou `permissions.disableAutoMode`) → a equipe cai em prompt e fica parada até o timeout. Sintoma: `running` no dashboard com o ciclo sem avançar. Veja **PERMISSÕES** para a saída.
-- **O processo claude de uma equipe morre sem gravar o Final Verdict** → o status file fica em `status=running` (o driver não chegou a escrever o terminal). A Main trata como `timeout` quando o relógio estoura; registre `crashed-without-status` nos soft-fails.
+- **O processo claude de uma equipe sai antes de o vigia ver o fim** (crash, ou `/exit` manual no meio da execução) → o driver encerra o vigia e faz ele mesmo o parse do journal desta execução: Final Verdict terminal → aquele status; journal sem Final Verdict terminal → `aborted` com `abort_reason=journal-missing-final-verdict`; nenhum journal desta execução → `aborted` com `abort_reason=journal-not-found`. O `claude_exit=<n>` fica no status file.
+- **O `/implement-and-evaluate` de uma equipe aborta antes de criar o journal** (Steps 1 a 2.5 dele: trio ausente, lock de outra execução viva, branch em checkout em outra worktree) → o claude continua aberto no prompt e o vigia nunca encontra um journal desta execução. A equipe fica `running` até o `team-timeout`, como antes do vigia. O motivo do abort fica no painel da equipe enquanto ela roda, e no `status/F<ID>.log` (captura do `pipe-pane`) depois que o timeout mata a janela.
 - **Colisão de PR: PRs de duas equipes tocam os mesmos arquivos** → não é problema desta skill. Cada `/implement-and-evaluate` resolve seus conflitos no Step 7 dele. Se o usuário mergear os dois PRs/MRs em sequência, o próprio forge cuida do merge humano do segundo.
 - **Ctrl-C / SIGTERM na Main** → as equipes continuam no tmux. Nenhum relatório consolidado é emitido. O usuário pode `tmux attach -t iaet-<wave-tag>-<run-id>`. A sessão foi criada destacada (`new-session -d`) precisamente para sobreviver à Main.
 - **`max-parallel=1`** → wave totalmente serial; ainda assim roda em worktrees + tmux pelo isolamento.
@@ -642,7 +657,7 @@ Nos dois regimes, o `wave-status.md` é o retrato canônico de nível de wave (s
 
 **`scripts/`** — executáveis copiados para o diretório da wave no Step 3.3 e rodados de lá:
 - `scripts/lib-time.sh` — helpers de tempo (`now_iso`, `iso_to_epoch`, `fmt_elapsed`). Carregado pelo `team-driver.sh`, pelo `dashboard.sh` e pelo tick do Step 6. A conversão de data tenta a sintaxe GNU e depois a BSD, então o `team-timeout` e os tempos decorridos funcionam em Linux/WSL2 e em macOS.
-- `scripts/team-driver.sh` — roda no painel ESQUERDO (.0) da janela de cada equipe. Sobe o `claude /implement-and-evaluate` e grava o status terminal na saída.
+- `scripts/team-driver.sh` — roda no painel ESQUERDO (.0) da janela de cada equipe. Sobe o vigia em background e o `claude /implement-and-evaluate` em foreground. O vigia grava o status terminal quando o journal desta execução tem Final Verdict terminal e o `.orchestrate.lock` foi liberado, sem esperar o claude sair; se o claude sair antes, o driver grava o status a partir do journal (caminho de reserva).
 - `scripts/services-tail.sh` — roda no painel SUPERIOR DIREITO (.1). Descobre logs de serviço por convenção (`.pids/*.log`, `logs/*.log`) e faz `tail -F`. Degrada com aviso na tela quando o projeto não usa nenhuma das convenções.
 - `scripts/ports-tail.sh` — roda no painel INFERIOR DIREITO (.2). Descobre por `lsof` as portas TCP em LISTEN de processos cujo CWD está dentro da worktree. **Agnóstico de projeto** — não lê `.env` nem assume nada do projeto.
 - `scripts/dashboard.sh` — roda na janela 0. Lê os journals e os status files e renderiza a tabela de status ao vivo.

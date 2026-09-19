@@ -3,7 +3,8 @@
 Fonte canônica para toda interação do pipeline com a plataforma de hospedagem do
 repositório (o *forge*). As skills `spec-writer`, `implement-and-evaluate`,
 `implement-and-evaluate-tmux` e `fix-runner` referenciam este arquivo em vez de
-embutir comandos de CLI; o `team-driver.sh` reconhece as duas formas de URL.
+embutir comandos de CLI. O `pr_url` das equipes do tmux também sai daqui: a Main
+do `implement-and-evaluate-tmux` o grava no Step 7.0 a partir da operação 3.4.
 
 Referência a partir de uma skill: `${CLAUDE_PLUGIN_ROOT}/references/forge.md`.
 
@@ -143,6 +144,9 @@ do `--yes` trava a execução até o timeout — ele não é opcional.
 
 Campos: `github` → `number`, `url`; `gitlab` → `iid`, `web_url`.
 
+Quem usa: o `implement-and-evaluate` no Step 7.8 (reusar a PR/MR que já existe) e
+o `implement-and-evaluate-tmux` no Step 7.0 (gravar o `pr_url` de cada equipe).
+
 ### 3.5 — Criar PR/MR
 
 > **Semântica:** abrir um PR/MR da branch atual para a branch padrão, com título
@@ -221,13 +225,17 @@ Resolva **uma vez por execução** e guarde em cache.
 |---|---|---|
 | `status: "pr-blocked"` | `prd_progress.json`, journal | lido pelo `team-driver.sh` (`is_terminal`) e pelo `dashboard.sh` |
 | `**Pull request:**` | header do bloco final do journal | é âncora de seção, não texto para o usuário |
-| `pr_url=` | status file das equipes do tmux | lido pelo `dashboard.sh:81` e pelo template de wave |
+| `pr_url=` | status file das equipes do tmux | gravado pela Main do `implement-and-evaluate-tmux` (Step 7.0); lido pelo `dashboard.sh:81` e pelo template de wave |
 | `feat(F<ID>): <Feature Name>` | título do PR/MR | convenção de commit, independente de forge |
 | `## Closes` / `Closes #<N>` | body do PR/MR | funciona nos dois forges |
 
-O `team-driver.sh` extrai a URL do journal com um padrão que aceita as duas
-formas — `…/pull/<N>` e `…/-/merge_requests/<N>`, em qualquer host, o que cobre
-GitLab auto-hospedado. O nome do campo continua `pr_url`.
+O `pr_url` é gravado pela Main do `implement-and-evaluate-tmux` no Step 7.0: para
+cada equipe `success`, ela aplica a operação 3.4 sobre `feat/F<ID>-<slug>` e grava
+o `url` (GitHub) ou o `web_url` (GitLab) do primeiro resultado. O journal não serve
+de fonte — o `implement-and-evaluate` o fecha antes de abrir a PR/MR. Como a URL
+vem do próprio forge, as duas formas (`…/pull/<N>` e `…/-/merge_requests/<N>`, em
+qualquer host) chegam sem tratamento. O nome do campo continua `pr_url` nos dois
+forges.
 
 ---
 

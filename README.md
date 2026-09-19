@@ -281,7 +281,7 @@ precisa saber de que lado cada string está antes de mexer nela.
 | Âncoras do PRD | `## 6. Functional Requirements`, `Capabilities`, `Dependency Graph`, `Execution Waves`, `Foundation Features` | `spec-writer`, `implement-feature`, `implement-and-evaluate-tmux` |
 | Âncoras do `contract.md` | `## Prerequisites`, `## Quality gates`, `## Coverage Manifest`, `Verification mode:`, `Common given:`, `Used by:` | `implement-feature`, `evaluator`, `fix-runner`, `design-review` |
 | Âncoras do eval-report | `## Abort reason`, `**Verdict:**`, `PASS` / `FAIL` / `BLOCKED` / `MANUAL` | `fix-runner` |
-| Âncoras do journal | `## Final Verdict`, `**Status:**`, `**Total cycles:**`, `**Pull request:**` | **`team-driver.sh`, via `awk`** |
+| Âncoras do journal | `## Final Verdict`, `**Status:**`, `**Total cycles:**`; `## Cycle Log` | **`team-driver.sh` (as três primeiras) e `dashboard.sh` (`## Cycle Log`), via `awk`** |
 | Valores de status | `success`, `manual-pending`, `stuck`, `exhausted`, `aborted`, `pr-blocked`, `running`, `done`, `implementing` | **`team-driver.sh` e `dashboard.sh`, via `case` e `grep -E`** |
 | Chaves e valores do `prd_progress.json` | `status`, `failure_reason`, `cycles`, `wave`, `dependencies` | todo o pipeline de execução |
 | Chaves do JSON que os subagentes devolvem | `status`, `items.failed`, `acs.verified`, `abort_reason` | `implement-and-evaluate` |

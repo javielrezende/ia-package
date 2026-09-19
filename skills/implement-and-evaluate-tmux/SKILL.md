@@ -103,7 +103,7 @@ Por execução:
    - `wave.lock` — lockfile de nível de wave, com PID.
    - `wave.meta` — key=value: wave-tag, started_at, max_parallel, team_timeout, permission_mode, foundation_features, tail, selected_features.
    - `queue.txt` — fila das features ainda não despachadas.
-   - `status/F<ID>.status` — um arquivo de status terminal por equipe, gravado pelo team driver.
+   - `status/F<ID>.status` — um arquivo de status terminal por equipe, gravado pelo team driver. A Main só toca nele em dois pontos: troca o status por `timeout` no Step 6 e acrescenta o `pr_url` no Step 7.0.
    - `status/F<ID>.started` — marcador de início da equipe, gravado pelo team driver logo antes do `claude`. Só a data de modificação importa: separa o journal desta execução dos journals antigos que a worktree herdou da branch padrão.
    - `status/F<ID>.log` — captura de `pipe-pane` do painel do claude (artefato só de debug).
    - `wave-status.md` — artefato consolidado final (formato em `references/wave-status-template.md`).
@@ -473,6 +473,24 @@ A Main lê esses números, calcula o TETO conforme a regra do Step 5.1, despacha
 
 ### Step 7 — Consolidar, finalizar, emitir o relatório
 
+**7.0 — Buscar a URL da PR/MR de cada equipe.** O journal da equipe não tem a URL: o `/implement-and-evaluate` o fecha no Step 7.6 dele, antes do push e da criação da PR/MR, e grava na linha **Pull request** que a URL fica no chat report. Por isso quem preenche o `pr_url` do status file é a Main, consultando o forge.
+
+Para cada equipe com `status=success` (só o sucesso abre PR/MR), aplique a operação **"listar PR/MR pela branch de origem"** (`${CLAUDE_PLUGIN_ROOT}/references/forge.md` § 3.4) sobre `feat/F<ID>-<slug>`, com o forge resolvido e guardado em cache no Step 2.4 — não resolva de novo. Rode do checkout principal: o remote é o mesmo das worktrees, e a consulta funciona mesmo que a janela da equipe já tenha sido fechada. Da saída JSON, tire a URL do primeiro item: `url` no GitHub, `web_url` no GitLab.
+
+- **PR/MR encontrado** → acrescente `pr_url=<url>` ao status file, com reescrita atômica que preserva os demais campos:
+
+  ```bash
+  sf="$(pwd)/.claude/worktrees/.wave-<run-id>/status/F<ID>.status"
+  { grep -v '^pr_url=' "$sf"; echo "pr_url=<url>"; } > "$sf.tmp.$$" && mv -f "$sf.tmp.$$" "$sf"
+  ```
+
+- **Nenhum resultado** (o push ou a criação da PR/MR falhou dentro da equipe, que termina `success` com o aviso no painel dela) → não grave o campo. A tabela mostra a equipe sem PR/MR.
+- **Falha do CLI** (rede, token expirado depois do Step 2.4, flag rejeitado pela versão do `glab`) → não grave o campo e registre o soft-fail `"URL da PR/MR de F<ID> não recuperada: <erro>"`. Siga para a próxima equipe.
+
+Equipes com outro status não passam pela busca: nenhuma delas abriu PR/MR nesta execução, e uma PR/MR aberta de uma execução anterior da mesma branch apareceria como se fosse desta.
+
+O `dashboard.sh` já lê o `pr_url` do status file e passa a mostrá-lo no próximo refresh. Com todas as equipes em status terminal, o `team-driver.sh` não reescreve mais o status file; a única escrita que ainda pode vir dele é o `claude_exit`, se o usuário sair do claude de uma janela preservada, e ela mantém os demais campos, `pr_url` inclusive.
+
 **7.1 — Reconciliar o `prd_progress.json` — condicionado ao `progress-path`.**
 
 Dois regimes, com implicações de correção bem diferentes:
@@ -556,6 +574,7 @@ Nos dois regimes, o `wave-status.md` é o retrato canônico de nível de wave (s
 - No timeout, mate a janela tmux da equipe e grave `status=timeout` no status file. Preserve a worktree.
 - Crie TODA janela de equipe com a sequência completa de 4 comandos do Step 5.2 (new-window + dois split-window + pipe-pane), inclusive as respawnadas da fila no Step 6.
 - Copie `lib-time.sh` junto com os demais scripts no Step 3.3 — `team-driver.sh` e `dashboard.sh` dependem dele.
+- No Step 7.0, busque no forge a PR/MR de cada equipe `success` pela branch `feat/F<ID>-<slug>` (operação 3.4 de `forge.md`) e grave o `pr_url` no status file. O journal não tem a URL, e o `team-driver.sh` não grava o campo. Falha da busca é soft-fail.
 - Depois que toda equipe atingir status terminal, reconcilie o `prd_progress.json` a partir dos journals **somente se `progress-path` foi informado** (Regime B). Sem ele, deixe o `prd_progress.json` do checkout principal intocado.
 - Emita o relatório consolidado conforme a seção Chat report do template.
 - Deixe a sessão tmux viva depois do Step 7 para inspeção do usuário. Imprima o comando de attach no relatório.
@@ -637,6 +656,7 @@ Nos dois regimes, o `wave-status.md` é o retrato canônico de nível de wave (s
 - **`permission-mode=auto` indisponível na sessão** (plano ou `permissions.disableAutoMode`) → a equipe cai em prompt e fica parada até o timeout. Sintoma: `running` no dashboard com o ciclo sem avançar. Veja **PERMISSÕES** para a saída.
 - **O processo claude de uma equipe sai antes de o vigia ver o fim** (crash, ou `/exit` manual no meio da execução) → o driver encerra o vigia e faz ele mesmo o parse do journal desta execução: Final Verdict terminal → aquele status; journal sem Final Verdict terminal → `aborted` com `abort_reason=journal-missing-final-verdict`; nenhum journal desta execução → `aborted` com `abort_reason=journal-not-found`. O `claude_exit=<n>` fica no status file.
 - **O `/implement-and-evaluate` de uma equipe aborta antes de criar o journal** (Steps 1 a 2.5 dele: trio ausente, lock de outra execução viva, branch em checkout em outra worktree) → o claude continua aberto no prompt e o vigia nunca encontra um journal desta execução. A equipe fica `running` até o `team-timeout`, como antes do vigia. O motivo do abort fica no painel da equipe enquanto ela roda, e no `status/F<ID>.log` (captura do `pipe-pane`) depois que o timeout mata a janela.
+- **PR/MR de uma equipe mergeado ou fechado antes do Step 7.0** → a operação 3.4 só lista PR/MR abertos, então a busca não o encontra e a equipe aparece sem PR/MR na tabela, sem soft-fail. A URL continua no `status/F<ID>.log` (captura do painel), onde o chat report da equipe a imprimiu.
 - **Colisão de PR: PRs de duas equipes tocam os mesmos arquivos** → não é problema desta skill. Cada `/implement-and-evaluate` resolve seus conflitos no Step 7 dele. Se o usuário mergear os dois PRs/MRs em sequência, o próprio forge cuida do merge humano do segundo.
 - **Ctrl-C / SIGTERM na Main** → as equipes continuam no tmux. Nenhum relatório consolidado é emitido. O usuário pode `tmux attach -t iaet-<wave-tag>-<run-id>`. A sessão foi criada destacada (`new-session -d`) precisamente para sobreviver à Main.
 - **`max-parallel=1`** → wave totalmente serial; ainda assim roda em worktrees + tmux pelo isolamento.

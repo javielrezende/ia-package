@@ -365,9 +365,8 @@ Próximos passos
 ## Gravação do documento
 
 O HLD não termina no chat. Ele é um artefato do pipeline: o hook de sessão procura
-`docs/HLD.md` para dizer onde o projeto está, o FDD é escrito no contexto dele, e o
-`spec-writer` o consulta quando existe. Um HLD que só foi impresso na conversa não
-existe para nenhuma dessas etapas.
+`docs/HLD.md` para dizer onde o projeto está, e o FDD é escrito no contexto dele. Um
+HLD que só foi impresso na conversa não existe para nenhuma dessas etapas.
 
 Depois que o usuário confirmar o documento final:
 

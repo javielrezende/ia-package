@@ -558,9 +558,9 @@ Estratégia de validação
 
 ## Gravação do documento
 
-O PRD de feature não termina no chat. Ele é um artefato do pipeline: o `spec-writer`
-trabalha a partir do que está escrito, e o hook de sessão só enxerga o que existe em
-disco.
+O PRD de feature não termina no chat: o arquivo é o registro da entrevista. O pipeline
+de execução parte do PRD do produto (`docs/PRD.md`), não deste arquivo; o hook de sessão
+só enxerga o que existe em disco.
 
 Depois que o usuário confirmar o documento final, resolva o destino nesta ordem:
 

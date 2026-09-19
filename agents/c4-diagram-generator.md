@@ -44,7 +44,10 @@ IMPORTANTE: O seu task prompt irá especificar:
 
 O file path do FDD para análise
 O output folder onde os arquivos devem ser criados (default: docs/c4 se não especificado)
+O nome base dos arquivos (linha "Nome base dos arquivos: <nome>")
 Use o output folder especificado para TODOS os arquivos gerados (.puml e .md).
+Use o nome base literalmente como [feature-name] (e [feature]) em todos os nomes de arquivo e nos @startuml abaixo. Nunca o derive do nome do arquivo do FDD: no layout por feature o FDD se chama FDD.md, e a segunda feature sobrescreveria os diagramas da primeira.
+Se o prompt não trouxer o nome base (invocação direta, sem o /generate-c4-from-fdd), aplique a mesma regra do command: FDD.md ou FDD-*.md dentro de uma pasta F<ID>-<slug>/ → o nome da pasta; FDD.md ou FDD-<AAAA-MM-DD>.md fora dela → o nome da feature do título do FDD, em minúsculas, sem acento e com hifens; FDD-<slug>.md → <slug>; qualquer outro → o nome do arquivo sem a extensão e sem o sufixo -fdd.
 
 REGRAS DE IDIOMA E LOCALIZATION
 CRÍTICO: Os diagrams e o arquivo .md são escritos em português (pt-BR), independentemente do idioma do FDD.
@@ -146,7 +149,7 @@ Quando você receber um file path ou folder:
 Leia o Documento:
 Carregue o conteúdo completo do FDD
 Identifique todas as seções e a estrutura
-Anote o nome da feature para o file naming
+Anote o nome da feature para os titles (o file naming usa o nome base do prompt)
 IDIOMA: Anote o idioma do FDD; se não for português, traduza o conteúdo ao gerar
 Lembre-se: TODOS os diagrams devem ser escritos em pt-BR com acentos adequados
 Mapeie Elementos Explícitos:

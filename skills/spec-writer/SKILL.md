@@ -395,6 +395,8 @@ Guarde a URL da *issue* retornada (`url` no GitHub, `web_url` no GitLab). NÃO a
 
 Informe o *path* dos arquivos de *spec*, *plan* e *contract*, o nível de complexidade da *feature*, quantas *phases* há no *plan* e a contagem de itens do contrato por superfície (ex.: "Contrato: 14 itens entre HTTP API (8), UI (4), E2E (2); 9/9 ACs do PRD cobertos"). Informe também a URL da *issue* (criada ou existente) quando o Step 6 rodou, e os `Soft-fails`, quando houver.
 
+Feche com a linha: `Próximo passo: versione o trio na branch padrão (commit ou PR/MR) antes de rodar a wave — as worktrees do implement-and-evaluate-tmux nascem dela e não enxergam o que só existe em disco.`
+
 ---
 
 ## Batch Mode
@@ -500,7 +502,11 @@ Batch concluído: 3/4 features geradas com sucesso
 ✓ F07 → docs/F07-background-processing-pipeline/
 ✓ F12 → docs/F12-administration-panel/
 ✗ F05 → falhou: <motivo>
+
+Próximo passo: versione o trio na branch padrão (commit ou PR/MR) antes de rodar a wave.
 ```
+
+A última linha vai sempre, com pelo menos uma *feature* gerada: as worktrees do `implement-and-evaluate-tmux` nascem da branch padrão, e a wave aborta no Step 1.6b dela quando o trio só existe em disco.
 
 Falhas de *sub-agents* são isoladas — outros *sub-agents* continuam. *Features* que falharam podem ser rodadas novamente de forma individual.
 

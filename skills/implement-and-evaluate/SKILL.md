@@ -94,6 +94,8 @@ Se os dois comandos falharem (clone sem `origin/HEAD` local, sem remote, sem red
 
 Os quatro estados acima são os únicos que merecem aviso. `pending` / `implemented` / `fail` são pontos de entrada normais do orquestrador e não produzem aviso.
 
+**Planejamento fora da branch padrão (best-effort).** Na mesma checagem, confira se o PRD (localizado como no Step 7.9: `prd_path` do `prd_progress.json`, senão `docs/PRD.md` → `PRD.md`) e o `prd_progress.json` estão versionados na branch padrão local: `git cat-file -e <padrão>:<path>`, com o caminho relativo à raiz do repositório. Para cada um que não estiver, emita no chat um aviso de uma linha: `"<path> não está versionado na <padrão> — versione-o lá por commit ou PR/MR seu; a wave paralela e as próximas features partem dela"`. Mesmo regime da checagem de status: não aborte, não pergunte. Pule em silêncio quando a branch padrão for desconhecida ou não existir localmente, e quando o arquivo não for localizado ou estiver fora do repositório. O trio desta feature não entra aqui: ele vai no commit de artefatos do Step 7.2.
+
 Aborts:
 
 - Trio ausente → aborte, sugira o `spec-writer`.
@@ -436,6 +438,7 @@ Faça o stage **por path explícito**, apenas destes arquivos:
 - A pasta `eval-screenshots-<ts>/` irmã de cada um desses relatórios, quando existir.
 - Cada `design-report-<ts>.md` e a pasta `design-screenshots-<ts>/` devolvidos pelos subagentes do Step 6.5 **desta execução**, quando o 6.5 rodou. Mesma regra: artefatos de outras execuções não entram.
 - O journal desta execução, `<feature-folder>/orchestration-<run-id>.md`, com o Cycle Log e o Cycle Detail atualizados.
+- O trio da feature (`<feature-folder>/spec.md`, `plan.md` e `contract.md`), cada arquivo quando `git status --porcelain -- <path>` mostrar mudança (não versionado ou modificado). Nenhuma skill do pipeline commita o trio antes daqui; sem este item, a PR/MR chegaria à branch padrão sem o contrato que a validou, e o `## Artifacts` do body citaria paths ausentes do PR.
 - O `prd_progress.json` localizado conforme **PROGRESS TRACKING**, quando `git status --porcelain -- <path>` mostrar mudança. Se o arquivo estiver fora do repositório ou for ignorado pelo git, não faça stage e registre em `Soft-fails`: "prd_progress.json não versionado neste repositório; ficou fora do commit de artefatos".
 
 Nunca faça stage do `.orchestrate.lock`, de journals de outras execuções nem de qualquer outro arquivo. Nunca use `git add -A` / `git add .`.
@@ -748,7 +751,8 @@ A anotação do orquestrador serve à clareza forense do JSON. O journal em `<fe
 - Libere o lockfile em qualquer caminho de término, incluindo aborts.
 - Repasse `progress-path=<path>` a todo prompt de subagente de sub-skill quando o receber como input, para que `implement-feature`, `evaluator` e `fix-runner` gravem no mesmo `prd_progress.json`. Grave `status="fail"` + `failure_reason` de nível de orquestrador conforme **PROGRESS TRACKING** no Step 8 nos casos `exhausted` / `stuck` / `aborted`; grave `status="pr-blocked"` + `failure_reason` no caso `pr-blocked`.
 - Quando o Step 6 calcular `success`, rode o Step 7 (fluxo de criação do PR): verifique que a branch atual não é a branch padrão, commite os artefatos de avaliação desta execução, faça fetch + merge de `origin/<default>`, resolva o conflito do `prd_progress.json` e despache o `fix-runner` Mode B para os demais conflitos, reavalie depois do merge, finalize o journal e commite os artefatos restantes, faça push da branch e então abra o PR/MR pelo forge resolvido, com o título canônico (`feat(F<ID>): <Feature Name>`) e o template de body documentado no Step 7. Pule o Step 7 de forma limpa (aviso no chat report, status continua `success`) quando a branch for a branch padrão, um commit de artefatos falhar, o push falhar ou a criação do PR/MR falhar — o trabalho está feito; só o passo de anúncio não pôde ser concluído.
-- Nos commits de artefatos (Steps 7.2, 7.6 e 8.4), faça stage por path explícito apenas dos eval-reports e das pastas `eval-screenshots-<ts>/` desta execução, do journal desta execução e do `prd_progress.json`.
+- Nos commits de artefatos (Steps 7.2, 7.6 e 8.4), faça stage por path explícito apenas dos eval-reports e das pastas `eval-screenshots-<ts>/` desta execução, dos design-reports e das pastas `design-screenshots-<ts>/` desta execução, do journal desta execução, do `prd_progress.json` e do trio da feature (`spec.md`, `plan.md`, `contract.md`) — o `prd_progress.json` e cada arquivo do trio só quando `git status --porcelain -- <path>` mostrar mudança.
+- Na checagem pré-execução do Step 1, avise numa linha — sem abortar, sem perguntar — quando o PRD ou o `prd_progress.json` não estiverem versionados na branch padrão local.
 - Resolva o forge (`github` | `gitlab`) uma única vez, no Step 7.0, conforme `${CLAUDE_PLUGIN_ROOT}/references/forge.md`. Esse arquivo é canônico para as seis operações de forge; nunca embuta comandos de CLI aqui nem assuma `gh`. CLI ausente ou não autenticado é soft-fail (o abort preventivo existe só no `implement-and-evaluate-tmux`, Step 2.4).
 - Detecte PRs/MRs existentes pela branch de origem (`references/forge.md` § 3.4) antes de criar; se houver, apenas faça push e reporte a URL existente.
 - Busque a issue aberta `[F<ID>]` correspondente (criada pelo `spec-writer`) conforme `references/forge.md` § 3.2 imediatamente antes de compor o body do PR/MR no Step 7.9. Quando houver correspondência, injete `## Closes\n\nCloses #<N>` no body para que o forge feche a issue automaticamente no merge; quando não houver ou o CLI falhar, omita a seção inteira e continue.
@@ -759,7 +763,8 @@ A anotação do orquestrador serve à clareza forense do JSON. O journal em `<fe
 - Grave `status` no `prd_progress.json` fora dos casos `exhausted` / `stuck` / `aborted` (sempre `fail`) e `pr-blocked`. O status é, de resto, das sub-skills (`implement-feature` / `evaluator` / `fix-runner`).
 - Commite fora dos Steps 7 e 8.4, ou faça push ou abra PRs fora do Step 7. Nenhum commit do orquestrador e nenhum push durante o loop de verificação; nenhum push no Step 8; nenhum PR aberto em `manual-pending` / `stuck` / `exhausted` / `aborted` / `pr-blocked`.
 - Faça commit no Step 8.4 com um merge em andamento (`.git/MERGE_HEAD` presente) — liste os paths no chat report em vez disso.
-- Faça stage do `.orchestrate.lock`, de relatórios ou journals de outras execuções, ou use `git add -A` / `git add .`.
+- Faça stage do `.orchestrate.lock`, de relatórios ou journals de outras execuções, de arquivos da pasta de outra feature (inclusive o trio dela), ou use `git add -A` / `git add .`.
+- Commite na branch padrão para versionar o planejamento. O aviso do Step 1 orienta; o PRD e o `prd_progress.json` chegam à branch padrão por commit ou PR/MR do usuário.
 - Pule git hooks (`--no-verify`).
 - Faça force-push (`git push --force` ou `--force-with-lease`). O Step 7 usa apenas `git push` simples — a abordagem de merge foi escolhida justamente para evitar reescritas de histórico que exigiriam force-push.
 - Abra um PR da branch padrão do projeto para ela mesma. O Step 2.5 é a primeira defesa (a execução sai da branch padrão antes do primeiro commit) e o safety check do Step 7.1 é a segunda, cancelando a criação do PR/MR quando a branch atual ainda for a padrão.

@@ -63,17 +63,22 @@ O pipeline é encadeado: cada etapa lê a anterior em vez de reperguntar o que j
 está escrito.
 
 ```
-PRD ──> HLD ──> FDD ──> spec.md + plan.md + contract.md ──> implementação
-                                                                  │
-                        ┌─────────────────────────────────────────┘
+PRD ──> HLD ──> FDD ──> spec.md + plan.md + contract.md ──> planejamento versionado
+                                                                       │
+                        ┌──────────────────────────────────────────────┘
                         ▼
-                  avaliação ⇄ correção ──> PR ──> ADRs ──> diagramas
+                  implementação ──> avaliação ⇄ correção ──> PR ──> ADRs ──> diagramas
 ```
 
 O par avaliação ⇄ correção repete até o contrato ser honrado, o retry budget
 acabar ou o circuit-breaker disparar. O veredito é do `evaluator`, nunca do
 implementador.
 
+- Antes da implementação, versione o planejamento — o PRD, o `prd_progress.json` e o
+  trio de cada feature — na branch padrão, por commit ou PR/MR. Nenhuma skill commita
+  lá. A wave paralela (`implement-and-evaluate-tmux`) cria as worktrees a partir da
+  branch padrão local e aborta antes de despachar quando o planejamento não está nela
+  ou diverge do disco; depois do merge do PR/MR, rode `git pull` antes da wave.
 - Não gere um FDD sem que o HLD exista; se ele não existir, diga isso antes de começar.
 - Não invente requisito que não esteja no PRD — marque como `[NEEDS INPUT]` e pergunte.
 - Documentos são escritos em **português (pt-BR)**; apenas títulos de seção e labels

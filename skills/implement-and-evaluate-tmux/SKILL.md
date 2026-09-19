@@ -39,6 +39,7 @@ A seleção PRECISA resolver para ≥1 feature. Seleção vazia → aborte expli
 
 Cada feature selecionada PRECISA ter:
 - Uma pasta `docs/F<ID>-<slug>/` contendo `spec.md`, `plan.md` e `contract.md`.
+- O trio, o PRD e o `prd_progress.json` (Regime A) commitados na branch padrão local e iguais ao que está em disco — as worktrees nascem dessa branch e só enxergam o que está commitado nela. Veja **Step 1.6b**.
 - `status` no `prd_progress.json` fora de {`done`, `removed`, `pr-blocked`, `implementing`} — veja **Step 1.6** para avisos/aborts.
 - Todas as dependências declaradas (campo `dependencies`) com `status == "done"` (caso contrário, aborte — dependências dentro da mesma wave estão explicitamente fora de escopo; veja **EDGE CASES**).
 
@@ -164,6 +165,52 @@ Se o arquivo não fizer parse como JSON, aborte citando o erro de parse.
 - Para cada ID no campo `dependencies` desta feature, cheque `status == "done"`. Se alguma dependência não estiver `done`, aborte com: `"F<ID> depende de F<DEP> (status=<S>); dependências dentro da mesma wave estão fora de escopo. Implemente F<DEP> antes via /implement-and-evaluate e re-rode."`.
 - **ID explícito sem entrada no `prd_progress.json`** (o usuário passou `F99` e o arquivo não tem F99): pule a checagem de dependências dessa feature, registre o soft-fail `"F<ID> ausente do prd_progress.json; validação de dependências pulada"` (vai para os Soft-fails do `wave-status.md` no finalize) e prossiga. A checagem do trio continua valendo.
 
+**1.6b — Planejamento versionado.**
+
+O Step 1.6 olha o checkout principal, mas as equipes não rodam nele: cada worktree do Step 4.1 nasce de um commit da branch padrão e só enxerga o que está commitado ali. Um trio que existe apenas em disco passa no 1.6 e some dentro de toda worktree — cada equipe aborta com "trio ausente" ou "PRD não encontrado". Esta skill não commita na branch padrão (veja **RULES**): ela confere aqui, antes de despachar, e orienta.
+
+*Branch padrão.* Resolva-a aqui, conforme a seção 4 de `${CLAUDE_PLUGIN_ROOT}/references/forge.md` (`git symbolic-ref --short refs/remotes/origin/HEAD`, sem o prefixo `origin/`; fallback `git remote show origin`), e guarde em cache para o resto da execução — o Step 4.1 lê esse cache. Isso é git puro e não depende do forge. Se os dois comandos falharem, aborte a wave: sem branch padrão não há de onde criar as worktrees nem contra o que conferir. Se a branch resolvida não existir localmente (`git rev-parse --verify --quiet refs/heads/<padrão>` falha), aborte: `"A branch padrão <padrão> não existe localmente, e as worktrees nascem dela. Rode 'git fetch origin <padrão>:<padrão>' e re-rode."`.
+
+*O que é conferido* — sempre contra a branch padrão **local**, a mesma ref que o `git worktree add` do Step 4.1 usa, com caminhos relativos à raiz do repositório (`git rev-parse --show-toplevel`):
+
+| Arquivo | Quando |
+|---|---|
+| PRD — `prd_path` do `prd_progress.json`, convertido para caminho relativo à raiz (o `prd-writer-for-complete-project` grava o caminho completo); fallback `docs/PRD.md` | sempre |
+| `prd_progress.json` localizado no Step 1.4 | Regime A (sem `progress-path` absoluto) |
+| `spec.md`, `plan.md`, `contract.md` de cada feature selecionada | sempre |
+
+Um arquivo com caminho absoluto fora da raiz do repositório não entra na conferência — nenhuma branch o carrega. Registre o soft-fail `"<path> fora do repositório; conferência de versionamento pulada"`.
+
+*Duas checagens por arquivo:*
+
+1. `git cat-file -e <padrão>:<path>` — o arquivo existe no commit de onde as worktrees nascem.
+2. `git hash-object -- <path>` igual a `git rev-parse <padrão>:<path>` — o conteúdo em disco é o mesmo do commit.
+
+A segunda garante também que a seleção, resolvida no Step 1.5 sobre o `prd_progress.json` do disco, e as equipes, que leem o da branch, enxergam o mesmo estado. Ela compara o conteúdo direto em vez de usar `git diff <padrão> -- <path>`: o diff acusa divergência sempre que o arquivo não é rastreado na branch em checkout, mesmo com o conteúdo idêntico ao da branch padrão.
+
+```bash
+DEFAULT="<branch padrão em cache>"
+(
+  cd "$(git rev-parse --show-toplevel)" || exit 1
+  for p in <paths relativos à raiz, um por arquivo da tabela>; do
+      if ! git cat-file -e "$DEFAULT:$p" 2>/dev/null; then
+          echo "  - $p — não versionado"
+      elif [ "$(git hash-object -- "$p" 2>/dev/null)" != "$(git rev-parse "$DEFAULT:$p")" ]; then
+          echo "  - $p — diverge do que está commitado"
+      fi
+  done
+)
+```
+
+Saída vazia → siga para o Step 1.7. Qualquer linha → aborte a wave **antes do lockfile e das worktrees**, com a lista completa (não pare no primeiro arquivo):
+
+```
+Planejamento fora da branch padrão (<padrão>) — as worktrees nasceriam sem ele:
+  - docs/F03-video-upload/contract.md — não versionado
+  - docs/PRD.md — diverge do que está commitado
+Commite ou abra um PR/MR com esses arquivos, atualize a <padrão> local (git pull) e re-rode.
+```
+
 **1.7 — Descubra as Foundation Features** (best-effort, só leitura).
 
 Localize o PRD: use o campo de primeiro nível `prd_path` do `prd_progress.json` quando presente; caso contrário, procure `docs/PRD.md` e depois `PRD.md` a partir do CWD para cima (máximo 4 níveis).
@@ -256,7 +303,7 @@ Dê permissão de execução a todos (`chmod +x`). A skill os distribui já com 
 git worktree add -b feat/F<ID>-<slug> .claude/worktrees/F<ID>-<slug> <default-branch>
 ```
 
-Descubra a branch padrão conforme a seção 4 de `${CLAUDE_PLUGIN_ROOT}/references/forge.md` (`git symbolic-ref --short refs/remotes/origin/HEAD`, sem o prefixo `origin/`; fallback `git remote show origin`) e guarde em cache para o resto da execução. Isso é git puro e não depende do forge. Se os dois comandos falharem, aborte a wave — sem branch padrão não há base de onde criar as worktrees.
+`<default-branch>` é a branch padrão resolvida e guardada em cache no Step 1.6b — não resolva de novo. É a mesma ref local contra a qual o 1.6b conferiu o planejamento, e é isso que dá valor à conferência: a worktree nasce exatamente do commit que foi checado.
 
 > **A branch da equipe nasce aqui, e só aqui.** O `/implement-and-evaluate` de cada equipe tem um Step 2.5 que garante a branch de trabalho quando a execução começa na branch padrão — mas dentro da worktree a branch atual já é `feat/F<ID>-<slug>`, diferente da padrão, então aquele step é **no-op por construção**. É o comportamento correto: não "conserte" isso criando branch dentro da worktree, e não remova o `-b` daqui na suposição de que a equipe cria a própria branch. Os dois lados montam o nome a partir do **nome da pasta da feature verbatim** (`F03-video-upload` → `feat/F03-video-upload`), justamente para que as duas portas de entrada nunca produzam branches diferentes para a mesma feature.
 
@@ -470,7 +517,7 @@ Nos dois regimes, o `wave-status.md` é o retrato canônico de nível de wave (s
 - `prd_progress.json` no `<progress-path>` não encontrado ou não parseável → registre em Soft-fails, pule a reconstrução.
 - Journal de uma equipe ausente ou malformado → registre em Soft-fails, pule a entrada daquela equipe.
 
-**Os Steps 1.4–1.6 são a única hora em que a skill LÊ o `prd_progress.json`** — para resolver a seleção, validar e checar dependências. Ela nunca grava durante o pre-flight.
+**Os Steps 1.4–1.7 são a única hora em que a skill LÊ o `prd_progress.json`** — para resolver a seleção, validar e checar dependências; o 1.6b e o 1.7 leem só o `prd_path`, para localizar o PRD. Ela nunca grava durante o pre-flight.
 
 **`progress-path` relativo** (ex.: `progress-path=docs/prd_progress.json`) é resolvido por equipe em relação ao CWD de cada equipe (a worktree dela), então cada uma grava na cópia da sua própria branch — mesma semântica do Regime A. Só um `progress-path` **absoluto** produz a semântica de arquivo compartilhado (Regime B). A skill não normaliza relativo → absoluto.
 
@@ -482,6 +529,8 @@ Nos dois regimes, o `wave-status.md` é o retrato canônico de nível de wave (s
 
 - Resolva a seleção a partir do `prd_progress.json` (campos `wave`, `dependencies`, `status`, `priority`), nunca por parse do PRD. Aborte quando o arquivo não existir ou não fizer parse.
 - Valide o trio (`spec.md` + `plan.md` + `contract.md`) de toda feature selecionada no Step 1.6.
+- Resolva a branch padrão no Step 1.6b e guarde em cache — o Step 4.1 lê o cache, não resolve de novo.
+- Confira no Step 1.6b, contra a branch padrão **local**, que o PRD, o `prd_progress.json` (Regime A) e o trio de cada feature selecionada existem nela e são iguais ao disco. Qualquer falha aborta a wave antes do lockfile e das worktrees, listando todos os arquivos com o motivo.
 - Valide o fechamento de dependências: toda dependência precisa estar `done`. Dependência dentro da mesma wave = abort.
 - Leia o Anexo A.3 do PRD (best-effort) e serialize as Foundation Features selecionadas antes do bloco paralelo, salvo `no foundation serialization`. Anuncie a decisão no chat antes de despachar.
 - Adquira `.claude/worktrees/.wave-<run-id>/wave.lock` antes de criar qualquer worktree.
@@ -500,6 +549,7 @@ Nos dois regimes, o `wave-status.md` é o retrato canônico de nível de wave (s
 **Nunca:**
 
 - Edite código, commite, faça push ou abra PRs a partir da sessão Main. Tudo isso é feito pelo `/implement-and-evaluate` de cada equipe, de dentro da worktree dela.
+- Commite o planejamento na branch padrão para destravar o Step 1.6b. Nenhuma skill do plugin commita na branch padrão (na Tray ela é protegida): o 1.6b lista os arquivos e orienta, e o planejamento chega lá por commit ou PR/MR do usuário.
 - Faça parse do PRD para resolver a seleção. O PRD só é lido no Step 1.7, só para Foundation Features, e só em best-effort.
 - Bloqueie numa chamada `Bash` em foreground esperando as equipes. O timeout de 10 minutos do Bash mataria waves longas. Use `Monitor` ou `ScheduleWakeup`.
 - Passe o `team-driver.sh` por `| tee` ou qualquer pipe. Isso quebra o TTY do claude e a janela fica sem saída. Use `tmux pipe-pane`.
@@ -554,6 +604,9 @@ Nos dois regimes, o `wave-status.md` é o retrato canônico de nível de wave (s
 - **Seleção vazia depois dos filtros** → aborte, imprima o conjunto resolvido para o usuário entender o que foi filtrado.
 - **Feature selecionada com dependência na mesma wave** → aborte com o par ofensor. A skill explicitamente NÃO faz ordenação topológica dentro da wave; isso é sinal de uso errado (o PRD deveria ter dividido a wave).
 - **Dependências entre waves ainda não `done`** → aborte com a dependência e o status dela.
+- **Planejamento fora da branch padrão** (trio, PRD ou `prd_progress.json` não commitados nela, ou editados em disco depois do commit) → aborta no Step 1.6b, antes do lockfile e das worktrees, listando cada arquivo com o motivo. É o estado normal logo depois do `spec-writer`, que grava em disco e não commita. O usuário commita ou abre um PR/MR, atualiza a branch padrão local e re-roda.
+- **PR/MR do planejamento já mergeado, mas a branch padrão local atrás do remoto** → o Step 1.6b aborta com `não versionado`; o `git pull` resolve. A conferência é contra a ref local de propósito: é dela que o `git worktree add` cria as worktrees.
+- **Main invocada fora da branch padrão** (o checkout principal está em `feat/…` depois de uma execução de feature única) → o `prd_progress.json` do disco carrega o estado daquela branch e, quando ele difere do da branch padrão, o Step 1.6b o acusa como divergente. Volte para a branch padrão e re-rode — a seleção precisa ler o mesmo estado que as equipes vão ler.
 - **PRD não localizável no Step 1.7** → soft-fail; a wave roda sem serialização de Foundation. Aceitável: nem todo projeto tem Anexo A.3.
 - **Anexo A.3 ausente do PRD** → caso normal de PRD que só acrescenta features a um produto maduro. Sem soft-fail, sem serialização.
 - **Uma Foundation Feature falha** → a wave **continua** e despacha o resto normalmente. Isso é consistente com o princípio 4 (independência) e com o grafo de dependências: se alguma feature do bloco paralelo dependesse dela, estaria em outra wave e o Step 1.6 já teria abortado. Registre em Soft-fails e destaque no relatório: `"F01 (Foundation) terminou em <status>; as features seguintes rodaram sobre um scaffolding possivelmente incompleto"`.

@@ -157,6 +157,39 @@ disco. Por isso rodar `/adr-generate` de novo retoma o que falhou sem duplicar o
 passou — e `/adr-generate <MODULE_ID>` limita a rodada a um módulo, que é como dar conta
 de um codebase grande sem estourar o contexto.
 
+## Antes de executar
+
+O planejamento — `docs/PRD.md`, `docs/prd_progress.json` e o trio `spec.md` /
+`plan.md` / `contract.md` de cada feature — precisa estar **commitado na branch
+padrão** antes de rodar a execução. As skills gravam esses arquivos em disco e param
+aí: nenhuma skill do plugin commita na branch padrão (na Tray ela é protegida). O
+planejamento chega lá por commit ou PR/MR seu.
+
+O motivo é a wave. O `implement-and-evaluate-tmux` cria uma worktree por feature a
+partir de um commit da branch padrão, e uma worktree só tem o que está commitado:
+arquivo que existe apenas no disco do checkout principal não aparece nela, e cada
+equipe abortaria com "trio ausente" ou "PRD não encontrado". Por isso a wave confere
+antes de criar a primeira worktree (Step 1.6b): o PRD, o `prd_progress.json` e o trio
+de cada feature selecionada precisam existir na branch padrão **local** e ser iguais
+ao que está em disco. Se algo faltar, ela lista tudo e para:
+
+```
+Planejamento fora da branch padrão (main) — as worktrees nasceriam sem ele:
+  - docs/F03-video-upload/contract.md — não versionado
+  - docs/PRD.md — diverge do que está commitado
+Commite ou abra um PR/MR com esses arquivos, atualize a main local (git pull) e re-rode.
+```
+
+A conferência é contra a ref local porque é dela que as worktrees nascem — depois do
+merge do PR/MR do planejamento, é o `git pull` que o traz para ela. A igualdade com o
+disco garante que a seleção da wave, feita sobre o `prd_progress.json` do disco, e as
+equipes, que leem o da branch, enxergam o mesmo estado.
+
+Uma feature só (`/implement-and-evaluate F03`) não aborta. O trio entra no commit de
+artefatos da própria feature, e a PR/MR sai com o contrato que a validou; se o PRD
+ou o `prd_progress.json` não estiverem na branch padrão, a execução avisa numa linha
+e segue.
+
 ## A branch de trabalho
 
 O `implement-and-evaluate` commita muito: um commit por fase do `implement-feature`,

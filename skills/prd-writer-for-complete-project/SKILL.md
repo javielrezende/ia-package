@@ -300,7 +300,7 @@ Escreva o JSON em `{PROGRESS_PATH}.tmp` e depois renomeie para `{PROGRESS_PATH}`
    - A lista de `Assumptions` inferidas, para revisão
    - As **Notas técnicas para o HLD** coletadas durante a entrevista, com a oferta de salvá-las em `{OUTPUT_FOLDER}/PRD-technical-notes.md`
 
-3. Sugira o próximo passo: `generate-high-level-design` para a arquitetura, depois `spec-writer` por feature.
+3. Sugira o próximo passo: `generate-high-level-design` para a arquitetura, depois `spec-writer` por feature. Inclua o aviso: **versione o PRD e o `prd_progress.json` na branch padrão, por commit ou PR/MR, antes de executar** — as worktrees da wave (`implement-and-evaluate-tmux`) nascem da branch padrão e não enxergam o que só existe em disco. Esta skill não commita.
 
 ---
 

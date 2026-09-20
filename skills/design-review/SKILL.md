@@ -85,10 +85,11 @@ Classifique em um de dois modos e **declare-o no relatório**:
 
 Pulado no modo `url=`. Caso contrário, e com a mesma disciplina de marcador do `evaluator`:
 
-1. Limpe órfãos de execuções anteriores cujos nomes casem com `design-review-<feature-id>-*` (tmpdirs) e `dsg_<feature-id>_*` (DBs). **Nunca remova nada que não case com o marcador.** Se um `processes.lock` candidato tiver PID vivo, aborte: outra execução é dona dele.
+1. Limpe órfãos de execuções anteriores cujos nomes casem com `design-review-<feature-id>-*` (tmpdirs), `dsg_<feature-id>_*` (DBs) e `dsg_<feature-id>_*` (projetos compose). **Nunca remova nada que não case com o marcador.** Se um `processes.lock` candidato tiver PID vivo, aborte: outra execução é dona dele.
 2. Instale dependências, crie o DB efêmero `dsg_<feature-id>_<run-id>`, rode migrations.
 3. **Semeie dados realistas.** Uma tela vazia não pode ser avaliada — listas com um registro de lorem ipsum escondem problemas de densidade, truncamento e hierarquia. Use os seeds do projeto; se o contrato declara `Persistent state`, semeie-o. Registre o que foi semeado.
-4. Suba os runtime services e faça health-check.
+4. **Aloque uma porta livre para cada runtime service** e injete-a pela variável ou flag que o projeto declara, exatamente como o `evaluator` faz no Step 4.6 dele — mesma motivação: um design-review rodando dentro de uma wave concorre com as outras equipes, e uma porta compartilhada faria esta skill capturar screenshots da tela de outra feature. Quando o projeto usa compose, suba com `docker compose -p dsg_<feature-id>_<run-id>`. Serviço com porta cravada → soft-fail no relatório, usa a padrão e segue.
+5. Suba os runtime services e faça health-check **na porta alocada**. Toda rota capturada no Step 4 é montada a partir dela.
 
 Se o bring-up não completar, aborte com status `aborted at step 3` e o que falhou.
 
@@ -201,7 +202,7 @@ Grave o relatório seguindo `references/report-template.md` e imprima a projeç�
 
 ### Step 9 — Tear-down
 
-Idempotente, na ordem: mate os PIDs do `processes.lock`, remova o DB `dsg_<feature-id>_<run-id>`, `rm -rf` no tmpdir. Best-effort — uma falha aqui vira aviso, nunca derruba o relatório. Pulado sob `keep env` (imprima os detalhes de conexão e o comando de limpeza).
+Idempotente, na ordem: mate os PIDs do `processes.lock`, derrube o projeto compose desta execução quando existir (`docker compose -p dsg_<feature-id>_<run-id> down -v --remove-orphans`), remova o DB `dsg_<feature-id>_<run-id>`, `rm -rf` no tmpdir. Best-effort — uma falha aqui vira aviso, nunca derruba o relatório. Pulado sob `keep env` (imprima os detalhes de conexão e o comando de limpeza).
 
 ---
 
@@ -234,7 +235,7 @@ Onde esta skill se encaixa entre as outras do `ia-package`:
 - Na dúvida entre duas faixas, desça.
 - Converta toda deficiência num `## Design fixes` com `Change` executável.
 - Preserve o hard threshold: dimensão ≤ 3 reprova sozinha.
-- Limpe apenas recursos que casem com os marcadores da skill (`design-review-<feature-id>-*`, `dsg_<feature-id>_*`).
+- Limpe apenas recursos que casem com os marcadores da skill (`design-review-<feature-id>-*` para tmpdirs, `dsg_<feature-id>_*` para DBs e projetos compose).
 
 **Nunca:**
 

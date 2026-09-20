@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "ia-package",
-  "description": "Marketplace pessoal com o plugin ia-package: pipeline de documentação técnica (PRD, HLD, FDD, spec, ADRs, C4/Mermaid) para Claude Code.",
+  "description": "Marketplace pessoal com o plugin ia-package: pipeline agêntico que leva uma feature do PRD ao PR/MR para Claude Code.",
   "owner": {
     "name": "Javiel Rezende",
     "email": "javielrezende@gmail.com"
@@ -10,8 +10,8 @@
     {
       "name": "ia-package",
       "source": "./",
-      "description": "Pipeline de documentação técnica assistida por IA: entrevistas guiadas que geram PRD, HLD, FDD, specs, ADRs e diagramas C4/Mermaid, até a implementação da feature.",
-      "category": "documentation",
+      "description": "Pipeline agêntico de execução de features: do PRD ao PR/MR — spec, plan e contrato de comportamento, implementação, avaliação contra o contrato e correção em loop.",
+      "category": "development",
       "author": {
         "name": "Javiel Rezende",
         "email": "javielrezende@gmail.com"

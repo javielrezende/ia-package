@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SessionStart — injeta no contexto onde o projeto está no pipeline de documentação.
+# SessionStart — injeta no contexto onde o projeto está no pipeline de execução.
 #
 # Sem isso, o Claude só descobre que já existe um docs/PRD.md depois de procurar.
 # Com isso, ele já começa a sessão sabendo qual é o próximo passo do pipeline.
@@ -13,6 +13,8 @@ found=""
 add() { found="${found}\n- $1"; }
 
 [ -f "docs/PRD.md" ]  && add "PRD:   docs/PRD.md"
+# O HLD e o FDD são gerados fora deste plugin, mas continuam sendo reportados:
+# o hook relata o que encontra em disco, não o que ele mesmo produz.
 [ -f "docs/HLD.md" ]  && add "HLD:   docs/HLD.md"
 
 # O FDD e o PRD de feature são um por feature: moram na pasta da feature quando ela
@@ -102,17 +104,8 @@ PY
   fi
 fi
 
-adr_count=$(find docs/adrs -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
-[ "${adr_count:-0}" -gt 0 ] && add "ADRs:  $adr_count em docs/adrs/"
-
-c4_count=$(find docs/c4 -name '*.puml' 2>/dev/null | wc -l | tr -d ' ')
-[ "${c4_count:-0}" -gt 0 ] && add "C4:    $c4_count diagramas em docs/c4/"
-
-mmd_count=$(find docs/mermaid -name '*.mmd' -o -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
-[ "${mmd_count:-0}" -gt 0 ] && add "Mermaid: $mmd_count arquivos em docs/mermaid/"
-
 # Nada do pipeline existe ainda: fica quieto em vez de poluir toda sessão.
 [ -z "$found" ] && exit 0
 
-printf 'Artefatos do pipeline ia-package já presentes neste projeto:%b\n\nOrdem do pipeline: PRD (+ prd_progress.json) -> HLD -> FDD -> spec/plan/contract -> implementação -> avaliação (eval-report) -> correção -> ADRs -> diagramas. Leia o artefato anterior antes de gerar o próximo, em vez de reperguntar ao usuário o que já está documentado. O prd_progress.json é a fonte determinística do estado de cada feature; o eval-report mais recente de uma pasta de feature é o veredito canônico dela.\n' "$found"
+printf 'Artefatos do pipeline ia-package já presentes neste projeto:%b\n\nOrdem do pipeline: PRD (+ prd_progress.json) -> spec/plan/contract -> implementação -> avaliação (eval-report) -> correção -> PR/MR. Leia o artefato anterior antes de gerar o próximo, em vez de reperguntar ao usuário o que já está documentado. O prd_progress.json é a fonte determinística do estado de cada feature; o eval-report mais recente de uma pasta de feature é o veredito canônico dela.\n' "$found"
 exit 0

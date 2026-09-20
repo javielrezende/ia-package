@@ -1,11 +1,12 @@
 # CLAUDE.md — exemplo para projetos que usam o ia-package
 
-Copie este arquivo para a **raiz do seu projeto** (o projeto que você vai documentar,
-não este repositório do plugin) com o nome `CLAUDE.md` e ajuste os caminhos e a stack.
+Copie este arquivo para a **raiz do seu projeto** (o projeto onde o pipeline vai
+rodar, não este repositório do plugin) com o nome `CLAUDE.md` e ajuste os caminhos
+e a stack.
 
-O plugin traz as skills e os agentes; este arquivo traz o que é específico do seu
-projeto e que o plugin não tem como adivinhar: onde os documentos moram, qual a
-stack, e qual convenção o time segue.
+O plugin traz as skills; este arquivo traz o que é específico do seu projeto e que
+o plugin não tem como adivinhar: onde os documentos moram, qual a stack, e qual
+convenção o time segue.
 
 ---
 
@@ -17,22 +18,12 @@ Todo artefato do pipeline vive em `docs/`:
 |---|---|---|
 | PRD do produto | `docs/PRD.md` | `prd-writer-for-complete-project` |
 | Estado das features | `docs/prd_progress.json` | `prd-writer-for-complete-project`, atualizado pelo resto do pipeline |
-| PRD de uma feature | `docs/<Fxx-nome>/PRD.md` | `generate-prd-for-feature` |
-| High-Level Design | `docs/HLD.md` | `generate-high-level-design` |
-| Feature Design Doc | `docs/<Fxx-nome>/FDD.md` | `generate-feature-design-doc` |
 | Spec + plano + contrato | `docs/<Fxx-nome>/spec.md`, `plan.md` e `contract.md` | `spec-writer` |
 | Relatório de avaliação | `docs/<Fxx-nome>/eval-report-<ts>.md` | `evaluator` |
 | Journal de orquestração | `docs/<Fxx-nome>/orchestration-<ts>.md` | `implement-and-evaluate` |
-| ADRs | `docs/adrs/generated/` | agentes `adr-*` |
-| Diagramas C4 | `docs/c4/` | `/generate-c4-from-fdd` |
-| Diagramas Mermaid | `docs/mermaid/` | `/generate-mermaid-diagram-from-fdd` |
 | Diretriz de código | `docs/<linguagem>-development-guidelines.md` | `generate-development-guideline` |
 
 Pastas de feature seguem `docs/F01-nome-da-feature/`, com o ID vindo do PRD do produto.
-O PRD de feature e o FDD são **um por feature** e moram nessa pasta. Quando a pasta ainda
-não existe (entrevista feita antes do PRD do produto), eles caem em `docs/PRD-<nome>.md` e
-`docs/FDD-<nome>.md`, na raiz de `docs/`. Nenhum dos dois sobrescreve arquivo existente
-sem perguntar, e nenhum deles escreve em `docs/PRD.md` — esse é o PRD do produto inteiro.
 
 A diretriz de código é um arquivo por linguagem: `docs/go-development-guidelines.md`,
 `docs/typescript-development-guidelines.md`.
@@ -63,11 +54,11 @@ O pipeline é encadeado: cada etapa lê a anterior em vez de reperguntar o que j
 está escrito.
 
 ```
-PRD ──> HLD ──> FDD ──> spec.md + plan.md + contract.md ──> planejamento versionado
-                                                                       │
-                        ┌──────────────────────────────────────────────┘
-                        ▼
-                  implementação ──> avaliação ⇄ correção ──> PR ──> ADRs ──> diagramas
+PRD ──> spec.md + plan.md + contract.md ──> planejamento versionado
+                                                       │
+        ┌──────────────────────────────────────────────┘
+        ▼
+  implementação ──> avaliação ⇄ correção ──> PR
 ```
 
 O par avaliação ⇄ correção repete até o contrato ser honrado, o retry budget
@@ -79,7 +70,6 @@ implementador.
   lá. A wave paralela (`implement-and-evaluate-tmux`) cria as worktrees a partir da
   branch padrão local e aborta antes de despachar quando o planejamento não está nela
   ou diverge do disco; depois do merge do PR/MR, rode `git pull` antes da wave.
-- Não gere um FDD sem que o HLD exista; se ele não existir, diga isso antes de começar.
 - Não invente requisito que não esteja no PRD — marque como `[NEEDS INPUT]` e pergunte.
 - Documentos são escritos em **português (pt-BR)**; apenas títulos de seção e labels
   estruturais ficam em inglês.
@@ -130,8 +120,6 @@ Portas e variáveis de ambiente que o ambiente efêmero precisa sobrescrever:
 
 - Não commitar documento com `[NEEDS INPUT]` ou `TBD` em aberto sem sinalizar
   as pendências na descrição do commit ou do PR.
-- Não editar à mão os arquivos em `docs/adrs/generated/`: eles são regerados
-  pelos agentes `adr-*`. Ajustes manuais vão para um novo ADR que supersede o antigo.
 - Não editar à mão `eval-report-*.md` nem `orchestration-*.md`: são histórico de
   auditoria. Para um veredito novo, rode o `evaluator` de novo — ele grava outro
   arquivo com timestamp.

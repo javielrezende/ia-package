@@ -8,6 +8,19 @@ O plugin traz as skills; este arquivo traz o que é específico do seu projeto e
 o plugin não tem como adivinhar: onde os documentos moram, qual a stack, e qual
 convenção o time segue.
 
+Não copie o README do plugin para cá — ele é versionado junto com as skills e
+atualiza sozinho. Deixe só o ponteiro abaixo.
+
+---
+
+## Pipeline agêntico
+
+Este projeto usa o pipeline do plugin **ia-package**: PRD → spec/plan/contract →
+implementação → avaliação → correção → PR/MR.
+
+Fluxo completo, comandos, overrides e estados finais:
+<https://github.com/javielrezende/ia-package>
+
 ---
 
 ## Documentação deste projeto
@@ -20,7 +33,8 @@ Todo artefato do pipeline vive em `docs/`:
 | Estado das features | `docs/prd_progress.json` | `prd-writer-for-complete-project`, atualizado pelo resto do pipeline |
 | Spec + plano + contrato | `docs/<Fxx-nome>/spec.md`, `plan.md` e `contract.md` | `spec-writer` |
 | Relatório de avaliação | `docs/<Fxx-nome>/eval-report-<ts>.md` | `evaluator` |
-| Journal de orquestração | `docs/<Fxx-nome>/orchestration-<ts>.md` | `implement-and-evaluate` |
+| Journal de orquestração | `docs/<Fxx-nome>/orchestration-<ts>.md` | `implement-and-evaluate` — inclusive dentro de cada worktree, quando a feature roda numa wave |
+| Status da wave | `.claude/worktrees/.wave-<run-id>/wave-status.md` | `implement-and-evaluate-tmux`. **Não é versionado**: vive no disco local e some se a pasta for limpa |
 | Diretriz de código | `docs/<linguagem>-development-guidelines.md` | `generate-development-guideline` |
 
 Pastas de feature seguem `docs/F01-nome-da-feature/`, com o ID vindo do PRD do produto.
@@ -45,8 +59,31 @@ nunca são editados à mão nem sobrescritos, e cada execução gera um arquivo 
 O CLI correspondente precisa estar instalado e autenticado para que a criação de
 issue e de PR/MR funcione: `gh` para GitHub, `glab` para GitLab. Sem ele, o
 pipeline não trava — ele faz todo o trabalho, salva os arquivos, commita e
-imprime o comando manual do que faltou. A exceção é o `implement-and-evaluate-tmux`,
-que checa o CLI antes de despachar a wave e aborta na largada.
+imprime o comando manual do que faltou.
+
+Uma única skill não degrada assim: o `implement-and-evaluate-tmux` checa o CLI
+antes de despachar a wave e aborta na largada, porque falhar no início custa menos
+que descobrir depois de 30 minutos que nenhuma equipe consegue abrir MR. Isso não
+faz dele *o* executor do pipeline — ele é apenas a porta de entrada paralela. Ver
+**Ordem de trabalho** abaixo.
+
+## Permissões
+
+O pipeline roda sozinho por dezenas de minutos. Se ele parar para pedir aprovação de
+um comando, a execução fica esperando — e numa wave paralela, a janela daquela equipe
+fica parada até o `team-timeout` matá-la.
+
+A forma recomendada de evitar isso **não** é desligar as permissões, é pré-aprovar o
+que o pipeline usa: copie o `templates/settings.example.json` do plugin para
+`.claude/settings.json` na raiz deste projeto e ajuste as listas à stack.
+
+- `permissions.allow` — os comandos que o pipeline roda o tempo todo (testes, lint,
+  build, git, `gh`/`glab`, subir e derrubar serviços). Pré-aprovados, nunca perguntam.
+- `permissions.deny` — o que nunca deve rodar, com ou sem agente. **Regras `deny`
+  valem em todos os modos de permissão, inclusive `bypassPermissions`.**
+
+Esse arquivo é versionado e vale para todo mundo no projeto. Com ele no lugar, o modo
+de permissão padrão já basta para o pipeline rodar sem interrupção.
 
 ## Ordem de trabalho
 
@@ -65,11 +102,29 @@ O par avaliação ⇄ correção repete até o contrato ser honrado, o retry bud
 acabar ou o circuit-breaker disparar. O veredito é do `evaluator`, nunca do
 implementador.
 
-- Antes da implementação, versione o planejamento — o PRD, o `prd_progress.json` e o
-  trio de cada feature — na branch padrão, por commit ou PR/MR. Nenhuma skill commita
-  lá. A wave paralela (`implement-and-evaluate-tmux`) cria as worktrees a partir da
-  branch padrão local e aborta antes de despachar quando o planejamento não está nela
-  ou diverge do disco; depois do merge do PR/MR, rode `git pull` antes da wave.
+**Quando o planejamento precisa estar commitado antes de executar** depende da porta
+de entrada. Nenhuma skill do plugin commita na branch padrão; o planejamento chega lá
+por commit ou PR/MR seu.
+
+- **Uma feature (`/ia-package:implement-and-evaluate F03`) — nada precisa ser
+  commitado antes.** O próprio orquestrador commita o trio (`spec.md`, `plan.md`,
+  `contract.md`) junto com os artefatos de avaliação, e o PR sai com o contrato que
+  validou a implementação. Se o PRD ou o `prd_progress.json` ainda não estiverem na
+  branch padrão, a execução avisa numa linha e segue.
+- **Uma wave (`/ia-package:implement-and-evaluate-tmux wave 3`) — obrigatório.** Não
+  é processo, é git: `git worktree add` materializa a árvore a partir de um commit,
+  então arquivo que existe só no disco do checkout principal não aparece dentro da
+  worktree, e cada equipe abortaria com "trio ausente". A wave confere isso antes de
+  criar a primeira worktree e para, listando o que falta. Depois do merge do PR/MR do
+  planejamento, rode `git pull` na branch padrão local antes da wave.
+
+Mesmo na execução de uma feature, commitar o `contract.md` antes vale a pena quando a
+feature é de risco alto: o contrato é a especificação que o evaluator vai cobrar, e
+revisá-lo antes é o último ponto barato de intervenção humana — depois dele o loop
+roda sozinho, e qualquer objeção ao contrato invalida ciclos já gastos.
+
+Em qualquer das duas portas de entrada:
+
 - Não invente requisito que não esteja no PRD — marque como `[NEEDS INPUT]` e pergunte.
 - Documentos são escritos em **português (pt-BR)**; apenas títulos de seção e labels
   estruturais ficam em inglês.
@@ -99,14 +154,30 @@ implementador.
 - Criar banco efêmero:
 - Rodar migrations:
 - Semear dados (o mecanismo de seed/factory que o projeto usa):
-- Subir os serviços:
+- Subir os serviços (**parametrizado por porta** — veja abaixo):
 - Health-check de cada serviço (URL ou sinal de prontidão):
 - Derrubar os serviços:
 - Resetar o estado entre um item e outro:
 - Onde ficam as fixtures:
 - Ferramenta de automação de navegador (obrigatória para itens `UI-*` e `E2E-*`):
 
-Portas e variáveis de ambiente que o ambiente efêmero precisa sobrescrever:
+**Portas: declare a variável, não o número.** O evaluator e o design-review alocam
+uma porta livre por serviço a cada execução e a injetam no ambiente efêmero — é o que
+permite duas features rodarem em paralelo (a wave do `implement-and-evaluate-tmux`, ou
+dois terminais seus) sem que uma bata no serviço da outra e produza veredito falso.
+Para isso, cada serviço precisa aceitar a porta por variável de ambiente ou flag.
+
+Liste aqui a variável de cada serviço, não um valor fixo:
+
+| Serviço | Variável / flag que define a porta | Como o serviço é levantado |
+|---|---|---|
+|  |  |  |
+
+Se algum serviço tiver porta cravada e não puder ser parametrizado, diga aqui — a
+execução registra um soft-fail, usa a porta padrão e avisa que execuções paralelas
+daquele serviço vão colidir.
+
+Outras variáveis de ambiente que o ambiente efêmero precisa sobrescrever:
 
 -
 

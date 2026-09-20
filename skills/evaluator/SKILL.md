@@ -80,7 +80,7 @@ O que a skill precisa saber ao final do Step 2 (conhecimento ausente é registra
 - Como criar e remover um banco de dados efêmero.
 - Como rodar as migrations contra ele.
 - Como semear o Persistent state declarado no contrato.
-- Como iniciar, fazer health-check e parar cada serviço declarado em `Runtime services`.
+- Como iniciar, fazer health-check e parar cada serviço declarado em `Runtime services`, e **por qual variável de ambiente ou flag a porta de cada um é definida** (o bring-up aloca a porta; veja o Step 4.6). Se o projeto usa containers, como subi-los com um nome de projeto próprio (`docker compose -p <nome>` ou `COMPOSE_PROJECT_NAME`).
 - Como resetar o estado entre itens (o mecanismo preferido do projeto, ou um default sensato para a stack detectada).
 - Onde os Static inputs ficam e como verificar suas propriedades intrínsecas (ferramentas que o contrato nomeia — `ffprobe`, `file`, checagens de tamanho etc.).
 - Como conduzir cada superfície declarada no contrato (HTTP, UI, E2E, Service, CLI, Worker, Event).
@@ -89,7 +89,9 @@ O que a skill precisa saber ao final do Step 2 (conhecimento ausente é registra
 
 Antes de levantar qualquer coisa, procure recursos órfãos de execuções anteriores do evaluator e remova-os. **Remova apenas recursos cujos nomes dão match com o marcador da skill** — nunca qualquer outra coisa.
 
-**Definição do marcador (fixa).** `<feature-id>` é o segmento inicial `F<N>` do nome da pasta da feature, em minúsculas e sem caracteres não alfanuméricos (ex.: pasta `F03-video-upload` → `f03`). A skill PRECISA usar exatamente essa forma em todo marcador — nome do DB, path do tmpdir, path do lockfile, referências no relatório — para que a limpeza dê match byte a byte com a criação entre execuções.
+**Definição do marcador (fixa).** `<feature-id>` é o segmento inicial `F<N>` do nome da pasta da feature, em minúsculas e sem caracteres não alfanuméricos (ex.: pasta `F03-video-upload` → `f03`). A skill PRECISA usar exatamente essa forma em todo marcador — nome do DB, path do tmpdir, path do lockfile, **nome do projeto compose**, referências no relatório — para que a limpeza dê match byte a byte com a criação entre execuções.
+
+**Todo recurso nomeável da execução carrega `eval_<feature-id>_<run-id>`.** É o que permite duas execuções concorrentes — duas equipes de uma wave, ou dois terminais seus — levantarem ambientes que não se enxergam. Portas não são nomeáveis, e por isso são alocadas em vez de fixadas (Step 4.6).
 
 **Segurança contra execuções concorrentes.** Antes de remover qualquer coisa, examine os arquivos `processes.lock` candidatos em busca de PIDs vivos (qualquer PID listado que responda a um sinal `kill -0` está vivo). **Se algum lockfile candidato tiver ao menos um PID vivo, aborte a nova execução** com uma mensagem no formato: `já existe uma execução do evaluator para <feature-id>: PID <N> vivo em <lockfile>. Espere terminar ou encerre-a, e re-rode.` NÃO remova esse lockfile, seu tmpdir, nem qualquer DB associado ao seu run-id — a execução viva é dona deles.
 
@@ -98,6 +100,7 @@ Depois que a checagem de segurança passar:
 - Bancos de dados: remova qualquer DB cujo nome dê match com `eval_<feature-id>_*`.
 - Tmpdirs: `rm -rf` em qualquer diretório sob `<os.tmpdir()>/evaluator-<feature-id>-*/`.
 - Processos: examine os arquivos `<os.tmpdir()>/evaluator-<feature-id>-*/processes.lock`; mate os PIDs listados que ainda estão vivos (best-effort — se um PID foi reciclado para um processo não relacionado, pule em vez de arriscar matar um estranho).
+- Containers: quando o projeto usa compose, derrube todo projeto compose cujo nome dê match com `eval_<feature-id>_*` (`docker compose -p <nome> down -v --remove-orphans`). Descubra os nomes pelo label do compose, não por adivinhação — ex.: `docker ps -a --filter label=com.docker.compose.project --format '{{index .Labels "com.docker.compose.project"}}' | sort -u` e filtre pelo prefixo. A mesma checagem de PID vivo acima protege a execução concorrente: um projeto compose cujo run-id pertence a um lockfile vivo NÃO é derrubado.
 
 Registre cada recurso removido na seção "Pre-run cleanup" do relatório. Se a própria limpeza der erro (permissão, lock), registre um aviso e prossiga — órfãos não são bloqueadores.
 
@@ -108,8 +111,17 @@ Registre cada recurso removido na seção "Pre-run cleanup" do relatório. Se a 
 3. **Crie o tmpdir** em `<os.tmpdir()>/evaluator-<feature-id>-<run-id>/`. Crie o lockfile `processes.lock` dentro dele.
 4. **Rode as migrations** contra o DB efêmero.
 5. **Semeie o Persistent state** declarado no contrato.
-6. **Inicie os runtime services** declarados em `Runtime services` (backend, web, fila etc.). Faça o health-check de cada um antes de prosseguir. Acrescente os PIDs ao lockfile.
-7. **Pre-flight: verifique cada entrada de todas as subseções de Prerequisites presentes no contrato** contra o ambiente ao vivo. Subseções ausentes do contrato são puladas (não há entradas para verificar).
+6. **Aloque uma porta livre para cada runtime service.** NUNCA use a porta padrão do projeto: duas execuções concorrentes (duas equipes de uma wave, ou dois terminais seus) a disputariam, e a segunda ou falha com `EADDRINUSE` ou — pior — passa a exercitar o serviço da primeira e produz um veredito falso.
+
+   - Escolha cada porta pedindo ao SO uma porta efêmera livre (abra um socket em `0`, leia a porta atribuída, feche) e confirme que ela continua livre imediatamente antes do start.
+   - Injete cada porta pela variável de ambiente ou flag que o projeto declara para aquele serviço (descoberto no Step 2). Toda URL que a execução usar daí em diante — health-check, itens `API-*`, base URL do navegador nos itens `UI-*` / `E2E-*`, gates dependentes de serviço — PRECISA ser montada a partir da porta alocada, nunca da porta do arquivo de config.
+   - Grave o mapa `<serviço> → <porta>` em `<tmpdir>/ports.env` e registre-o na seção Discovery do relatório. É o que permite o usuário inspecionar o ambiente sob `keep env`.
+   - **Serviço que não aceita porta por variável nem por flag** → registre um soft-fail (`<serviço> tem porta fixa <N>; execuções paralelas desta feature vão colidir`), use a porta padrão e siga. Degradar é melhor que abortar; a linha no relatório é o que informa o usuário a parametrizar o serviço.
+
+7. **Suba os containers com nome de projeto próprio**, quando o projeto usa compose: `docker compose -p eval_<feature-id>_<run-id> up -d` (ou `COMPOSE_PROJECT_NAME` no ambiente). Isso namespaceia containers, volumes e rede, e é o que o Step 3 e o Step 7 usam como marcador. Sem isso, duas execuções compartilham os mesmos containers e a derrubada de uma mata o ambiente da outra. Combine com o item 6: as portas publicadas pelo compose também são as alocadas, nunca as do arquivo.
+
+8. **Inicie os runtime services** declarados em `Runtime services` (backend, web, fila etc.). Faça o health-check de cada um **na porta alocada** antes de prosseguir. Acrescente os PIDs ao lockfile.
+9. **Pre-flight: verifique cada entrada de todas as subseções de Prerequisites presentes no contrato** contra o ambiente ao vivo. Subseções ausentes do contrato são puladas (não há entradas para verificar).
 
    - `Runtime services` — o endpoint de health ou sinal de prontidão de cada entrada retorna sucesso.
    - `Persistent state` — cada handle declarado existe com os atributos declarados (consulte o DB).
@@ -121,7 +133,7 @@ Registre cada recurso removido na seção "Pre-run cleanup" do relatório. Se a 
 
    Um prerequisite declarado que nenhum item referencia (nenhum `given` / `when` / `Common given:` da superfície consome o handle, path ou chave) é uma **declaração órfã** — um bug de autoria do contrato. Verifique normalmente; se `✗`, registre em "Soft-fails" com a nota `<entry> declared but no item references it`. O resultado não bloqueia nenhum item; a linha expõe a deriva do contrato para o autor corrigir.
 
-Se qualquer um dos passos 1–6 não completar (erro de instalação, migrations explodem, um serviço se recusa a subir depois de uma espera razoável etc.), aborte a execução antes do Step 5. Reporte o que completou até a falha em "Abort reason".
+Se qualquer um dos passos 1–8 não completar (erro de instalação, migrations explodem, um serviço se recusa a subir depois de uma espera razoável etc.), aborte a execução antes do Step 5. Reporte o que completou até a falha em "Abort reason".
 
 ### Step 5 — Quality gates
 
@@ -134,7 +146,7 @@ Roda **depois** que o Step 4 (bring-up + pre-flight) termina com sucesso, **ante
 1. Faça o parsing de cada entrada. Cada linha sob a seção tem o formato `- **<name>** — \`<command>\` — <description>`. O comando entre crases é o comando de shell literal a executar. O nome rotula a entrada no relatório. A descrição é informativa.
 
 2. Execute cada entrada sequencialmente, na ordem do documento. Para cada uma:
-   - Rode `<command>` num shell com raiz na raiz do projeto, com o **ambiente efêmero** da execução levantada injetado (`DATABASE_URL` apontando para `eval_<feature-id>_<run-id>`, URLs dos runtime services iniciados etc.). Gates estáticos (lint, typecheck, arquitetura) ignoram as variáveis injetadas; gates dependentes de DB ou de serviço as usam para verificar contra o ambiente recém-levantado.
+   - Rode `<command>` num shell com raiz na raiz do projeto, com o **ambiente efêmero** da execução levantada injetado (`DATABASE_URL` apontando para `eval_<feature-id>_<run-id>`, URLs dos runtime services nas portas alocadas no Step 4.6, as variáveis de porta do `ports.env` etc.). Gates estáticos (lint, typecheck, arquitetura) ignoram as variáveis injetadas; gates dependentes de DB ou de serviço as usam para verificar contra o ambiente recém-levantado.
    - Capture exit code, stdout, stderr.
    - Marque a entrada `✓` (exit 0) ou `✗` (exit não-zero).
 
@@ -212,12 +224,13 @@ Um único item com erro de transporte → 1 retry. Se continuar falhando, regist
 Idempotente. Depois do último item ou em qualquer caminho de abort, nesta ordem:
 
 1. Mate os processos listados em `<tmpdir>/processes.lock`.
-2. Remova o DB efêmero (`eval_<feature-id>_<run-id>`).
-3. `rm -rf` no tmpdir.
+2. Derrube o projeto compose desta execução, quando existir: `docker compose -p eval_<feature-id>_<run-id> down -v --remove-orphans`. Só o desta execução — nunca um de outro run-id, que pode pertencer a uma equipe viva.
+3. Remova o DB efêmero (`eval_<feature-id>_<run-id>`).
+4. `rm -rf` no tmpdir (o que libera também o `ports.env`).
 
 Cada passo é best-effort — registre avisos em caso de falha, NÃO derrube o relatório. Órfãos deixados para trás são limpos no Step 3 da próxima execução.
 
-Se `keep env` estiver ativo, pule o Step 7 inteiro. Imprima os detalhes de conexão (URL do DB, URLs dos serviços, path do tmpdir) para que o usuário possa inspecionar manualmente, mais o comando explícito de limpeza que ele pode rodar depois.
+Se `keep env` estiver ativo, pule o Step 7 inteiro. Imprima os detalhes de conexão (URL do DB, URLs dos serviços **com as portas alocadas**, nome do projeto compose, path do tmpdir) para que o usuário possa inspecionar manualmente, mais o comando explícito de limpeza que ele pode rodar depois.
 
 ### Step 8 — Report
 
@@ -304,15 +317,16 @@ Essa única escrita cobre todos os caminhos de término. Nenhuma escrita acontec
 **Sempre:**
 
 - Trate o `contract.md` como a fonte única da verdade sobre o que verificar. Não consulte o spec, o plan ou o PRD para as asserções.
-- Rode a fase de gates (Step 5) depois que o Step 4 (bring-up + pre-flight) tiver sucesso, antes de executar qualquer item, quando o contrato tiver uma seção `## Quality gates`. Execute cada entrada na ordem do documento, fail-fast no primeiro exit não-zero, e capture exit code + stderr por entrada. Injete o ambiente efêmero (`DATABASE_URL` e as URLs dos serviços iniciados) no shell do comando do gate para que gates dependentes de DB ou de serviço possam validar contra o ambiente levantado. Pule a fase silenciosamente quando a seção estiver ausente.
+- Rode a fase de gates (Step 5) depois que o Step 4 (bring-up + pre-flight) tiver sucesso, antes de executar qualquer item, quando o contrato tiver uma seção `## Quality gates`. Execute cada entrada na ordem do documento, fail-fast no primeiro exit não-zero, e capture exit code + stderr por entrada. Injete o ambiente efêmero (`DATABASE_URL`, as variáveis de porta do `ports.env` e as URLs dos serviços iniciados) no shell do comando do gate para que gates dependentes de DB ou de serviço possam validar contra o ambiente levantado. Pule a fase silenciosamente quando a seção estiver ausente.
 - Rode o pre-flight sobre cada entrada de Prerequisites declarada no contrato (em qualquer uma das cinco subseções que estiverem presentes) antes de executar qualquer item.
 - Execute os itens sequencialmente em ordem de pirâmide: Service → HTTP API → CLI → Worker → Event → UI → E2E → Manual.
 - Resete o estado entre cada item usando o mecanismo de reset descoberto no projeto.
+- Isole a execução de qualquer outra que possa estar rodando em paralelo: DB, tmpdir e projeto compose carregam `eval_<feature-id>_<run-id>`; as portas dos runtime services são alocadas livres no Step 4.6 e injetadas por variável. Toda URL usada nos itens, nos gates e no health-check sai da porta alocada.
 - Traduza os bullets do `then` via `references/assertion-patterns.md` de forma mecânica quando os padrões derem match; marque o item com `*` e registre a interpretação quando não derem.
 - Para itens de UI/E2E, rode a baseline visual (Step 6.6) — sucesso de DOM/clique não basta sozinho. Um overlay cortado, uma thumbnail quebrada ou um layout visivelmente colapsado precisa dar FAIL no item mesmo que todos os bullets do contrato fossem passar.
 - Marque os itens como um de `PASS / FAIL / BLOCKED / MANUAL / SKIPPED`. Projete os ACs como `✓ / ✗ / ⊘`.
 - Persista o relatório em `<feature-folder>/eval-report-<ISO-timestamp>.md` seguindo `references/report-template.md`. O placeholder `<ISO-timestamp>` é o mesmo run-id usado no nome do DB e no tmpdir, estável byte a byte em todas as referências.
-- Limpe apenas recursos cujos nomes dão match com os marcadores da skill (`eval_<feature-id>_*` para DBs, `evaluator-<feature-id>-*` para tmpdirs, PIDs no próprio lockfile). Nunca toque em qualquer outra coisa.
+- Limpe apenas recursos cujos nomes dão match com os marcadores da skill (`eval_<feature-id>_*` para DBs e projetos compose, `evaluator-<feature-id>-*` para tmpdirs, PIDs no próprio lockfile). Nunca toque em qualquer outra coisa.
 - O tear-down é idempotente; órfãos são limpos no Step 3 da próxima execução.
 - Quando a descoberta esgotar todas as camadas sem uma resposta, aborte com um diagnóstico que liste o que foi tentado e onde documentar.
 - Grave o veredito no `prd_progress.json` conforme **PROGRESS TRACKING** no final do Step 8 (depois que o relatório em arquivo foi gravado), modificando apenas a entrada da target feature. Pule a escrita silenciosamente, com uma linha em "Soft-fails", se o arquivo não for localizável, não fizer parse, ou o feature ID estiver ausente.
@@ -324,7 +338,8 @@ Essa única escrita cobre todos os caminhos de término. Nenhuma escrita acontec
 - Crie arquivos que o projeto não tem (um seed ausente, uma fixture ausente, um teste ausente). Marque os itens dependentes como `BLOCKED` ou `MANUAL` e reporte.
 - Rode a test suite existente do projeto como substituta da execução direta dos itens do contrato. Os itens são exercitados diretamente. (Os quality gates declarados em `## Quality gates` são uma preocupação separada — eles rodam no Step 5 porque o contrato os declara como pré-condições, não como substitutos do exercício dos itens.)
 - Pule a fase de gates via override. O Step 5 é imutável quando `## Quality gates` existe; não há flag `skip gates`.
-- Remova um banco de dados ou faça `rm -rf` num diretório cujo nome não dá match com o próprio marcador da skill. Jamais.
+- Suba um runtime service na porta padrão do projeto quando ela puder ser parametrizada, ou um container sem o nome de projeto compose desta execução. É assim que duas execuções paralelas passam a compartilhar ambiente — e um veredito colhido do serviço de outra execução é pior que um abort.
+- Remova um banco de dados, derrube um projeto compose ou faça `rm -rf` num diretório cujo nome não dá match com o próprio marcador da skill. Jamais.
 - Faça commit, push ou abra PRs. Nem o arquivo de relatório é commitado automaticamente.
 - Marque um AC `✓` quando qualquer item de cobertura não estiver `PASS`. Use `⊘` para cobertura parcial (BLOCKED / MANUAL / SKIPPED), `✗` para qualquer FAIL.
 - Marque um bullet PASS sem registrar o valor observado. Todo PASS e todo FAIL tem evidência `expected` / `observed`.
@@ -370,7 +385,9 @@ Overrides não reconhecidos ou contraditórios: o default vence; registre em "Ov
 - **Projeto não documenta nada sobre avaliação.** As camadas de descoberta 1, 3-5 ainda produzem contexto suficiente para a maioria das stacks. Quando não produzem, a execução aborta com um diagnóstico; a mensagem aponta a camada 2 (`CLAUDE.md` / `harness/`) como o lugar para documentar.
 - **Fixture de Static input ausente ou falha na checagem intrínseca.** O pre-flight marca a entrada `✗`; os itens que a consomem ficam `BLOCKED`. A skill nunca cria a fixture.
 - **Seed de Persistent state ausente.** Igual ao anterior — itens `BLOCKED`, nenhuma criação automática.
-- **Duas execuções concorrentes do evaluator na mesma feature.** Cada execução cria um DB e um tmpdir com nomes únicos. Teoricamente seguro, mas não suportado na prática — podem ocorrer colisões de porta nos serviços. Documente em "Soft-fails" se detectado e recomende serializar.
+- **Duas execuções concorrentes do evaluator na mesma feature.** A checagem de segurança do Step 3 as impede: um `processes.lock` com PID vivo aborta a segunda execução. Não tente contornar.
+- **Duas execuções concorrentes em features diferentes** (o caso normal de uma wave). Suportado: DB, tmpdir e projeto compose carregam run-ids diferentes, e as portas são alocadas livres no Step 4.6. A única fonte de colisão que sobra é um serviço com porta cravada — que já produziu um soft-fail no bring-up.
+- **`EADDRINUSE` mesmo depois da alocação.** A porta foi tomada entre a sondagem e o start (corrida rara). Aloque outra porta e tente de novo, até 3 vezes; se persistir, aborte com `aborted at step 4` citando o serviço e a última porta tentada.
 - **Contrato com zero itens.** Aborte: contrato malformado.
 - **Filtro seleciona zero itens.** Aborte com explicação.
 - **`keep env` e execução abortada.** O tear-down continua sendo pulado; o usuário inspeciona o estado parcial. Documente isso claramente na saída do chat.

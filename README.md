@@ -1,10 +1,15 @@
 # ia-package
 
-Plugin do Claude Code com um pipeline de documentação técnica assistida por IA:
-entrevistas guiadas que produzem **PRD → HLD → FDD → spec/plan/contract →
-implementação → avaliação → correção → ADRs → diagramas C4/Mermaid**.
+Plugin do Claude Code com um pipeline agêntico que leva uma feature do PRD ao PR/MR:
+**PRD → spec/plan/contract → implementação → avaliação → correção → PR/MR**, com o
+loop de avaliação e correção rodando sozinho até o contrato ser honrado.
 
 Os documentos são gerados em português (pt-BR).
+
+> As skills de documentação e arquitetura que **não** participam deste loop — as
+> entrevistas de PRD de feature, HLD, FDD e deep research, o fluxo de ADRs e os
+> geradores de diagramas C4/Mermaid — foram extraídas para um pacote separado. Elas
+> se invocam uma de cada vez e nada aqui lê o que elas produzem.
 
 ## Instalação
 
@@ -23,17 +28,6 @@ skills gerarem documentos aderentes ao projeto em vez de genéricos.
 ## O que vem dentro
 
 ### Skills (invocadas por `/nome` ou automaticamente pelo contexto)
-
-**Entrevistas** (`skills/for-interviews/`) — uma pergunta por vez, saída em Markdown
-com export opcional em JSON:
-
-| Skill | Produz | Onde grava |
-|---|---|---|
-| `generate-prd-for-feature` | PRD de **uma** feature | `docs/F<ID>-<slug>/PRD.md` |
-| `generate-high-level-design` | HLD: arquitetura, componentes, fluxos, modelo de dados | `docs/HLD.md` |
-| `generate-feature-design-doc` | FDD: contratos públicos, matriz de erros, observabilidade | `docs/F<ID>-<slug>/FDD.md` |
-| `generate-deep-research-part-1` | Briefing de pesquisa (até 6 perguntas) | saída no chat |
-| `generate-deep-research-part-2` | Formata o resultado da pesquisa em 16 seções | saída no chat |
 
 **Execução:**
 
@@ -74,24 +68,6 @@ de acessibilidade. Ela é **opt-in** no orquestrador (`with design review`): a m
 features não tem UI, e qualidade de design é decisão de produto, não invariante de
 correção.
 
-### Commands
-
-| Command | Faz |
-|---|---|
-| `/adr-generate [MODULE_ID ...] [--output-dir=] [--context-dir=] [--language=]` | Fase 3 do fluxo de ADRs: um agente `adr-generator` por potential ADR, em paralelo, depois a numeração sequencial e o relatório |
-| `/generate-c4-from-fdd <fdd.md> [pasta] [--no-images]` | C4 em PlantUML a partir do FDD |
-| `/generate-mermaid-diagram-from-fdd <fdd.md> [pasta]` | Diagramas Mermaid a partir do FDD |
-
-### Agents
-
-| Agent | Faz |
-|---|---|
-| `adr-analyzer` | Mapeia o codebase e identifica ADRs candidatos |
-| `adr-generator` | Gera um ADR formal em MADR (um arquivo por vez) |
-| `adr-linker` | Cria links bidirecionais entre ADRs |
-| `c4-diagram-generator` | Motor por trás de `/generate-c4-from-fdd` |
-| `mermaid-diagram-generator` | Motor por trás de `/generate-mermaid-diagram-from-fdd` |
-
 ### Hooks
 
 Rodam sozinhos, sem invocação. Ficam em silêncio quando não têm nada a dizer.
@@ -100,62 +76,29 @@ Rodam sozinhos, sem invocação. Ficam em silêncio quando não têm nada a dize
 |---|---|---|
 | `SessionStart` | `pipeline-status.sh` | Diz ao Claude, já na abertura da sessão, quais artefatos do pipeline já existem (incluindo contratos, eval-reports e journals por feature) e como está o tally de status do `prd_progress.json` |
 | `PostToolUse` (Write\|Edit) | `flag-open-gaps.sh` | Aponta ao Claude `[NEEDS INPUT]`, `TBD` e `<preencher>` deixados em documentos de `docs/`. Ignora os artefatos gerados pelo loop (`eval-report-*`, `orchestration-*`, `wave-status.md`), onde um `TBD` citado como evidência é conteúdo legítimo |
-| `SubagentStop` | hook do tipo `prompt` | Confere, pela mensagem final, se os agentes geradores relataram os artefatos que prometeram |
 
-Os dois primeiros são hooks de comando (bash + python3, sem dependências externas);
-o terceiro é um hook `prompt`, avaliado por um modelo. Exigem apenas `bash` e `python3`
-no PATH — se `python3` faltar, os scripts saem em silêncio em vez de quebrar a sessão.
+Os dois são hooks de comando (bash + python3, sem dependências externas). Exigem apenas
+`bash` e `python3` no PATH — se `python3` faltar, os scripts saem em silêncio em vez de
+quebrar a sessão.
 
 ## Onde os documentos são gravados
 
-As entrevistas não terminam no chat: cada uma grava o arquivo e informa o path. É o que
-faz a etapa seguinte encontrar o que a anterior escreveu — o hook de sessão e os commands
-de diagrama só enxergam arquivo, não o que passou na conversa.
+Nenhuma etapa termina no chat: cada uma grava o arquivo e informa o path. É o que faz a
+etapa seguinte encontrar o que a anterior escreveu — o hook de sessão e as skills de
+execução só enxergam arquivo, não o que passou na conversa.
 
 | Documento | Path | Regra |
 |---|---|---|
 | PRD do produto | `docs/PRD.md` | um por projeto |
-| HLD | `docs/HLD.md` | um por projeto |
-| PRD de feature | `docs/F<ID>-<slug>/PRD.md` | um por feature |
-| FDD | `docs/F<ID>-<slug>/FDD.md` | um por feature |
+| Estado das features | `docs/prd_progress.json` | um por projeto |
+| Spec, plano e contrato | `docs/F<ID>-<slug>/{spec,plan,contract}.md` | um trio por feature |
+| Relatório de avaliação | `docs/F<ID>-<slug>/eval-report-<ts>.md` | um por execução do `evaluator` |
+| Journal de orquestração | `docs/F<ID>-<slug>/orchestration-<ts>.md` | um por execução do orquestrador |
 | Diretriz de código | `docs/<linguagem>-development-guidelines.md` | um por linguagem |
 
-O PRD de feature e o FDD são resolvidos pela pasta da feature (`docs/F03-video-upload/`,
-a mesma que guarda `spec.md`, `plan.md` e `contract.md`). Quando nenhuma pasta casa — a
-entrevista foi feita antes do PRD do produto —, o arquivo cai em `docs/PRD-<slug>.md` ou
-`docs/FDD-<slug>.md` e a skill diz que fez isso. Quando mais de uma casa, ela pergunta em
-vez de escolher.
-
-**Nada é sobrescrito calado.** Se o arquivo de destino já existe, a skill mostra o que há
-lá e oferece três saídas: sobrescrever, gravar com a data no nome, ou não gravar. O
-`generate-prd-for-feature` nunca escreve em `docs/PRD.md`: esse path é do PRD do produto
-inteiro, e o resto do pipeline o usa como fonte de escopo.
-
-## O fluxo de ADRs
-
-São três fases, e cada uma tem porta de entrada própria:
-
-1. **Mapeamento e identificação** — o agente `adr-analyzer` varre o codebase, grava
-   `docs/adrs/mapping.md` e depois os potential ADRs em
-   `docs/adrs/potential-adrs/{must-document,consider}/<MODULE>/`.
-2. **Geração** — `/adr-generate` pega esses arquivos e produz os ADRs formais em MADR
-   em `docs/adrs/generated/<MODULE>/` (ou `needs-input/` quando faltam decisões de
-   negócio, custo ou compliance para um humano responder).
-3. **Ligação** — o agente `adr-linker` escreve os relacionamentos entre os ADRs. O
-   `/adr-generate` oferece rodá-lo no fim, e só roda com o sim explícito: ele reescreve
-   cabeçalhos de ADRs que já existiam.
-
-O `adr-generator` processa **um** arquivo por invocação, então `/adr-generate` despacha
-um agente por potential ADR em paralelo (até 8 por lote). Isso é o que torna a
-**numeração trabalho do command, não do agente**: agentes paralelos não conseguem
-combinar números entre si, então cada um grava o placeholder `ADR-XXX` e o command
-atribui a sequência no fim, numa passada serial, continuando de onde os ADRs existentes
-pararam.
-
-Cada potential ADR só vai para `potential-adrs/done/` depois de o ADR formal estar em
-disco. Por isso rodar `/adr-generate` de novo retoma o que falhou sem duplicar o que já
-passou — e `/adr-generate <MODULE_ID>` limita a rodada a um módulo, que é como dar conta
-de um codebase grande sem estourar o contexto.
+A pasta da feature (`docs/F03-video-upload/`) sai do nome da feature na Seção 6 do PRD e é
+o endereço de tudo que diz respeito a ela. Os `eval-report-*.md` e os `orchestration-*.md`
+são histórico com timestamp: cada execução grava um arquivo novo, nenhum é sobrescrito.
 
 ## Antes de executar
 
@@ -322,12 +265,11 @@ claude plugin validate .
 claude plugin details ia-package@skills-dir
 ```
 
-> **Atenção à descoberta de componentes.** `agents/` **não** é varrido
-> recursivamente: um agente em `agents/adr/x.md` é silenciosamente ignorado.
-> Já `skills/` aceita subpastas, mas só se o caminho for declarado no campo
-> `skills` do `plugin.json` — é por isso que `./skills/for-interviews/` está
-> listado lá. Rode `claude plugin details` depois de mexer na estrutura e confirme
-> a contagem de componentes.
+> **Atenção à descoberta de componentes.** `skills/` na raiz é varrido por default,
+> mas subpasta agrupadora (`skills/<grupo>/<skill>/SKILL.md`) só é descoberta se o
+> caminho estiver declarado no campo `skills` do `plugin.json` — sem a linha, a skill
+> some em silêncio, sem erro nenhum. Rode `claude plugin details` depois de mexer na
+> estrutura e confirme a contagem de componentes.
 
 ## Licença
 

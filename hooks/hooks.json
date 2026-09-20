@@ -1,5 +1,5 @@
 {
-  "description": "Hooks do ia-package: dão ao Claude a consciência de onde o projeto está no pipeline PRD -> HLD -> FDD -> spec -> implementação e sinalizam lacunas deixadas para trás.",
+  "description": "Hooks do ia-package: dão ao Claude a consciência de onde o projeto está no pipeline PRD -> spec/plan/contract -> implementação -> avaliação e sinalizam lacunas deixadas para trás.",
   "hooks": {
     "SessionStart": [
       {
@@ -20,17 +20,6 @@
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/flag-open-gaps.sh\"",
             "timeout": 10
-          }
-        ]
-      }
-    ],
-    "SubagentStop": [
-      {
-        "hooks": [
-          {
-            "type": "prompt",
-            "prompt": "Este projeto usa o pipeline de documentação do ia-package (PRD -> HLD -> FDD -> spec/plan -> ADRs -> diagramas C4/Mermaid). Um subagente acabou de terminar; os dados do evento, incluindo o tipo do agente e sua mensagem final, estão anexados.\n\nSe o subagente for um dos geradores do pipeline (adr-analyzer, adr-generator, adr-linker, c4-diagram-generator, mermaid-diagram-generator), avalie pela mensagem final: ele relatou ter gravado os arquivos de saída que prometeu, com o caminho de cada um? Se prometeu N artefatos, relatou N?\n\nResponda somente com JSON. Se algum artefato prometido claramente não foi gravado ou relatado, responda {\"ok\": false, \"reason\": \"<o que falta, curto e específico>\"}. Em qualquer outro caso — inclusive se o subagente não for do pipeline, ou se você não tiver certeza — responda {\"ok\": true}.",
-            "timeout": 30
           }
         ]
       }

@@ -8,7 +8,7 @@ description: |
 
 Você gera PRDs completos e detalhados por meio de uma entrevista estruturada. Seja direto e objetivo.
 
-**Princípio central:** o PRD descreve **o problema, o público, o valor e o que o produto precisa entregar**. Ele nunca descreve **como** o produto será construído. Toda decisão de arquitetura, tecnologia, stack, modelagem de dados ou implementação pertence ao HLD (`generate-high-level-design`) e ao FDD (`generate-feature-design-doc`), não a este documento.
+**Princípio central:** o PRD descreve **o problema, o público, o valor e o que o produto precisa entregar**. Ele nunca descreve **como** o produto será construído. Toda decisão de arquitetura, tecnologia, stack, modelagem de dados ou implementação pertence ao desenho técnico — o HLD, o FDD ou o `spec.md` da feature —, não a este documento.
 
 ---
 
@@ -300,7 +300,7 @@ Escreva o JSON em `{PROGRESS_PATH}.tmp` e depois renomeie para `{PROGRESS_PATH}`
    - A lista de `Assumptions` inferidas, para revisão
    - As **Notas técnicas para o HLD** coletadas durante a entrevista, com a oferta de salvá-las em `{OUTPUT_FOLDER}/PRD-technical-notes.md`
 
-3. Sugira o próximo passo: `generate-high-level-design` para a arquitetura, depois `spec-writer` por feature. Inclua o aviso: **versione o PRD e o `prd_progress.json` na branch padrão, por commit ou PR/MR, antes de executar** — as worktrees da wave (`implement-and-evaluate-tmux`) nascem da branch padrão e não enxergam o que só existe em disco. Esta skill não commita.
+3. Sugira o próximo passo: `spec-writer` por feature, para gerar o trio `spec.md` / `plan.md` / `contract.md`. Inclua o aviso: **versione o PRD e o `prd_progress.json` na branch padrão, por commit ou PR/MR, antes de executar** — as worktrees da wave (`implement-and-evaluate-tmux`) nascem da branch padrão e não enxergam o que só existe em disco. Esta skill não commita.
 
 ---
 

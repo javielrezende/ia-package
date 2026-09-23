@@ -237,7 +237,7 @@ re-verificar ou corrigir sem repassar pelo loop inteiro:
 | `evaluator` | Exercita cada item do `contract.md` ponta a ponta num ambiente efêmero e grava o veredito em `eval-report-<ts>.md` |
 | `design-review` | Avalia a qualidade visual da UI de uma feature: captura screenshots em 3 viewports e nos estados de borda, roda um piso mecânico de acessibilidade e grava notas por dimensão mais uma lista de correções em `design-report-<ts>.md` |
 | `fix-runner` | Passada corretiva sobre os itens reprovados de um eval-report, sobre os achados de um design-report, ou resolução de conflitos de merge |
-| `generate-development-guideline` | Diretriz de desenvolvimento por linguagem/stack, em `docs/<linguagem>-development-guidelines.md` |
+| `generate-development-guideline` | Diretriz de desenvolvimento por linguagem/stack, em `docs/<linguagem>-development-guidelines.md`. Não participa do loop: nenhuma outra skill a lê sozinha — cite o path no `CLAUDE.md` do projeto para que o `implement-feature` a siga |
 
 ### Skills de orquestração
 
@@ -393,8 +393,9 @@ correção exigir mudança no contrato, o trio precisa ser regerado pelo `spec-w
 
 ### O `prd_progress.json` é o registro de estado
 
-O `prd-writer-for-complete-project` o cria a partir do `Appendix A`, e as cinco skills
-de execução leem e escrevem nele ao longo dos ciclos. O schema — chaves, valores de
+O `prd-writer-for-complete-project` o cria a partir do `Appendix A`, e `implement-feature`,
+`evaluator`, `fix-runner`, `implement-and-evaluate` e `implement-and-evaluate-tmux` leem e
+escrevem nele ao longo dos ciclos. O schema — chaves, valores de
 `status`, semântica dos campos e invariantes — vive em `references/progress-schema.md`,
 na raiz do plugin. É a fonte canônica; cada skill documenta apenas as próprias escritas
 e aponta para lá.

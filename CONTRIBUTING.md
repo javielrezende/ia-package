@@ -10,7 +10,7 @@ o [`README.md`](README.md) cobre instalação, fluxo, overrides e artefatos.
 skills/<nome>/      SKILL.md + references/ + scripts/ de cada skill
 hooks/              hooks.json e os scripts de SessionStart e PostToolUse
 references/         fontes canônicas compartilhadas entre skills
-templates/          CLAUDE.example.md, copiado para o projeto do usuário
+templates/          CLAUDE.example.md e settings.example.json, copiados para o projeto do usuário
 ```
 
 ### Fontes canônicas

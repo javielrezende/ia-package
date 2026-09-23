@@ -33,6 +33,9 @@ Todo artefato do pipeline vive em `docs/`:
 | Estado das features | `docs/prd_progress.json` | `prd-writer-for-complete-project`, atualizado pelo resto do pipeline |
 | Spec + plano + contrato | `docs/<Fxx-nome>/spec.md`, `plan.md` e `contract.md` | `spec-writer` |
 | Relatório de avaliação | `docs/<Fxx-nome>/eval-report-<ts>.md` | `evaluator` |
+| Screenshots da avaliação | `docs/<Fxx-nome>/eval-screenshots-<ts>/` | `evaluator`, quando a feature tem itens `UI-*`/`E2E-*` |
+| Relatório de design | `docs/<Fxx-nome>/design-report-<ts>.md` | `design-review` |
+| Screenshots do design review | `docs/<Fxx-nome>/design-screenshots-<ts>/` | `design-review` |
 | Journal de orquestração | `docs/<Fxx-nome>/orchestration-<ts>.md` | `implement-and-evaluate` — inclusive dentro de cada worktree, quando a feature roda numa wave |
 | Status da wave | `.claude/worktrees/.wave-<run-id>/wave-status.md` | `implement-and-evaluate-tmux`. **Não é versionado**: vive no disco local e some se a pasta for limpa |
 | Diretriz de código | `docs/<linguagem>-development-guidelines.md` | `generate-development-guideline` |
